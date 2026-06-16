@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+}
+
+/* Keep Popover.Dialog out of normal flow so it doesn't affect sibling layout */
+[data-slot="popover-dialog"] {
+  position: absolute !important;
+}

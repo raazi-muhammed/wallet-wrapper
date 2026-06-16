@@ -4,8 +4,9 @@
     {
       "name": "heroui-tabs-app",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd /Users/raazimuhammed/Documents/GitHub/heroui-tabs-app && npm run dev"],
-      "port": 3000
+      "runtimeArgs": ["-c", "cd /Users/raazimuhammed/Documents/GitHub/heroui-tabs-app && npm run dev -- --port $PORT"],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

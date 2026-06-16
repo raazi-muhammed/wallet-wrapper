@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Modal,
   Button,
@@ -11,20 +11,29 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { fetchCategories } from "../actions";
-import type { Account, Category } from "../actions";
+import type { Account, Category, WalletRecord } from "../actions";
 
 type RecordType = "expense" | "income" | "transfer";
 
 const PAYMENT_TYPES = ["Cash", "CreditCard", "DebitCard", "BankTransfer", "Voucher", "MobilePayment", "Other"];
 const RECORD_STATES = ["Cleared", "Uncleared", "Reconciled"];
 
+function fmt(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
 interface Props {
   token: string;
   accounts: Account[];
+  records: WalletRecord[];
   onSuccess: () => void;
 }
 
-export function AddRecordButton({ token, accounts, onSuccess }: Props) {
+export function AddRecordButton({ token, accounts, records, onSuccess }: Props) {
   const state = useOverlayState();
 
   return (
@@ -39,6 +48,7 @@ export function AddRecordButton({ token, accounts, onSuccess }: Props) {
               <AddRecordForm
                 token={token}
                 accounts={accounts}
+                records={records}
                 onSuccess={() => { state.close(); onSuccess(); }}
                 onCancel={state.close}
               />
@@ -53,11 +63,12 @@ export function AddRecordButton({ token, accounts, onSuccess }: Props) {
 function AddRecordForm({
   token,
   accounts,
+  records,
   onSuccess,
-  onCancel,
 }: {
   token: string;
   accounts: Account[];
+  records: WalletRecord[];
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -70,22 +81,21 @@ function AddRecordForm({
   const [payer, setPayer] = useState("");
   const [paymentType, setPaymentType] = useState("Cash");
   const [recordState, setRecordState] = useState("Cleared");
-  const [recordDate, setRecordDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().slice(0, 16);
-  });
+  const [recordDate, setRecordDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [categories, setCategories] = useState<Category[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const noteRef = useRef<HTMLDivElement>(null);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? "INR";
 
   useEffect(() => {
     if (!token) return;
-    fetchCategories(token)
-      .then(setCategories)
-      .catch(() => {});
+    fetchCategories(token).then(setCategories).catch(() => {});
   }, [token]);
 
   useEffect(() => {
@@ -97,6 +107,50 @@ function AddRecordForm({
     if (!c.categoryType) return true;
     return c.categoryType.toLowerCase() === recordType;
   });
+
+  // Build deduplicated suggestions from existing records
+  const suggestions = (() => {
+    if (!note.trim()) return [];
+    const q = note.toLowerCase();
+    const seen = new Set<string>();
+    const results: WalletRecord[] = [];
+    for (const r of records) {
+      const label = (r.note ?? r.counterParty ?? "").toLowerCase();
+      if (!label.includes(q)) continue;
+      const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(r);
+      if (results.length >= 8) break;
+    }
+    return results;
+  })();
+
+  function applySuggestion(r: WalletRecord) {
+    setNote(r.note ?? "");
+    setPayer(r.counterParty ?? "");
+    setAmount(Math.abs(r.amount.value).toString());
+    setAccountId(r.accountId);
+    if (r.category?.id) setCategoryId(r.category.id);
+    const rt = r.recordType?.toLowerCase() as RecordType;
+    if (rt === "expense" || rt === "income" || rt === "transfer") setRecordType(rt);
+    setPaymentType(r.paymentType ?? "Cash");
+    if (r.recordState) setRecordState(r.recordState);
+    setShowSuggestions(false);
+  }
+
+  function handleNoteChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setNote(e.target.value);
+    setShowSuggestions(true);
+  }
+
+  function handleNoteBlur() {
+    blurTimer.current = setTimeout(() => setShowSuggestions(false), 150);
+  }
+
+  function handleSuggestionMouseDown() {
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+  }
 
   async function submit(addAnother: boolean) {
     if (!amount || !accountId) return;
@@ -197,10 +251,7 @@ function AddRecordForm({
                   aria-label="Amount"
                 />
                 <div className="w-24">
-                  <Select
-                    selectedKey={currencyCode}
-                    aria-label="Currency"
-                  >
+                  <Select selectedKey={currencyCode} aria-label="Currency">
                     <Select.Trigger>
                       <Select.Value />
                       <Select.Indicator />
@@ -309,23 +360,57 @@ function AddRecordForm({
           <div className="lg:w-72 space-y-4">
             <p className="text-sm font-semibold text-foreground">Other details</p>
 
-            {/* Note */}
-            <div>
+            {/* Note with autocomplete */}
+            <div className="relative" ref={noteRef}>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Note</label>
               <Input
                 placeholder="Describe your record"
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={handleNoteChange}
+                onFocus={() => note.trim() && setShowSuggestions(true)}
+                onBlur={handleNoteBlur}
                 fullWidth
                 aria-label="Note"
+                aria-autocomplete="list"
+                aria-expanded={showSuggestions && suggestions.length > 0}
               />
+              {showSuggestions && suggestions.length > 0 && (
+                <div
+                  onMouseDown={handleSuggestionMouseDown}
+                  className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-border bg-background shadow-lg overflow-hidden"
+                >
+                  {suggestions.map((r) => {
+                    const label = r.note ?? r.counterParty ?? "—";
+                    const positive = r.amount.value > 0;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => applySuggestion(r)}
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-default transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                          <p className="text-xs text-muted truncate">
+                            {r.accountName}
+                            {r.category ? ` · ${r.category.name}` : ""}
+                            {r.counterParty && r.note ? ` · ${r.counterParty}` : ""}
+                          </p>
+                        </div>
+                        <span className={`text-sm font-mono font-semibold shrink-0 ${positive ? "text-success" : "text-danger"}`}>
+                          {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Payer */}
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Payer</label>
               <Input
-                placeholder=""
                 value={payer}
                 onChange={(e) => setPayer(e.target.value)}
                 fullWidth

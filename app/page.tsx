@@ -355,6 +355,7 @@ export default function Home() {
               <AddRecordButton
                 token={token}
                 accounts={accounts.filter((a) => !a.archived)}
+                records={records}
                 onSuccess={() => loadData(token)}
               />
             )}

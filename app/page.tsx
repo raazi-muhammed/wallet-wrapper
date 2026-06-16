@@ -230,7 +230,7 @@ function AccountCard({ account }: { account: Account }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit: (r: WalletRecord) => void }) {
+function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -284,7 +284,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
                   </Table.Cell>
                   <Table.Cell>
                     <button
-                      onClick={() => onEdit(r)}
+                      onClick={() => onEdit?.(r)}
                       className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-default transition-colors"
                       aria-label="Edit record"
                     >

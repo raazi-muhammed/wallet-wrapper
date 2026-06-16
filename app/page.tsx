@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
@@ -230,7 +230,7 @@ function AccountCard({ account }: { account: Account }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-function RecordsTable({ records }: { records: WalletRecord[] }) {
+function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; highlightedId?: string }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -251,8 +251,9 @@ function RecordsTable({ records }: { records: WalletRecord[] }) {
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
               const label = r.note ?? r.counterParty ?? "—";
+              const highlighted = r.id === highlightedId;
               return (
-                <Table.Row key={r.id} id={r.id}>
+                <Table.Row key={r.id} id={r.id} data-record-id={r.id} className={highlighted ? "outline outline-2 outline-accent" : ""}>
                   <Table.Cell>{fmtDate(r.recordDate)}</Table.Cell>
                   <Table.Cell>{r.accountName}</Table.Cell>
                   <Table.Cell>
@@ -291,6 +292,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
+  const [highlightedId, setHighlightedId] = useState<string | undefined>();
+  const recordsSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const t = localStorage.getItem("wallet_token") ?? "";
@@ -333,6 +336,17 @@ export default function Home() {
     setError("");
   }
 
+  function handleGoToRecord(id: string) {
+    const rec = records.find((r) => r.id === id);
+    if (rec) setSelectedAccount(rec.accountId);
+    setHighlightedId(id);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-record-id="${id}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    setTimeout(() => setHighlightedId(undefined), 2500);
+  }
+
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
 
@@ -357,6 +371,7 @@ export default function Home() {
                 accounts={accounts.filter((a) => !a.archived)}
                 records={records}
                 onSuccess={() => loadData(token)}
+                onGoToRecord={handleGoToRecord}
               />
             )}
             <SettingsPopover
@@ -392,7 +407,7 @@ export default function Home() {
 
         {/* Records */}
         {(activeAccounts.length > 0 || records.length > 0) && (
-          <section className="space-y-4">
+          <section ref={recordsSectionRef} className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">
                 Records <span className="normal-case font-normal">(last 3 months)</span>
@@ -418,7 +433,7 @@ export default function Home() {
                 </Select.Popover>
               </Select>
             </div>
-            <RecordsTable records={displayedRecords} />
+            <RecordsTable records={displayedRecords} highlightedId={highlightedId} />
           </section>
         )}
       </main>

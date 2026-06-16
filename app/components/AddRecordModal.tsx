@@ -31,9 +31,10 @@ interface Props {
   accounts: Account[];
   records: WalletRecord[];
   onSuccess: () => void;
+  onGoToRecord: (id: string) => void;
 }
 
-export function AddRecordButton({ token, accounts, records, onSuccess }: Props) {
+export function AddRecordButton({ token, accounts, records, onSuccess, onGoToRecord }: Props) {
   const state = useOverlayState();
 
   return (
@@ -51,6 +52,7 @@ export function AddRecordButton({ token, accounts, records, onSuccess }: Props) 
                 records={records}
                 onSuccess={() => { state.close(); onSuccess(); }}
                 onCancel={state.close}
+                onGoToRecord={(id) => { state.close(); onGoToRecord(id); }}
               />
             </Modal.Dialog>
           </Modal.Container>
@@ -65,12 +67,14 @@ function AddRecordForm({
   accounts,
   records,
   onSuccess,
+  onGoToRecord,
 }: {
   token: string;
   accounts: Account[];
   records: WalletRecord[];
   onSuccess: () => void;
   onCancel: () => void;
+  onGoToRecord: (id: string) => void;
 }) {
   const [recordType, setRecordType] = useState<RecordType>("expense");
   const [amount, setAmount] = useState("");
@@ -383,24 +387,35 @@ function AddRecordForm({
                     const label = r.note ?? r.counterParty ?? "—";
                     const positive = r.amount.value > 0;
                     return (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => applySuggestion(r)}
-                        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-default transition-colors"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{label}</p>
-                          <p className="text-xs text-muted truncate">
-                            {r.accountName}
-                            {r.category ? ` · ${r.category.name}` : ""}
-                            {r.counterParty && r.note ? ` · ${r.counterParty}` : ""}
-                          </p>
-                        </div>
-                        <span className={`text-sm font-mono font-semibold shrink-0 ${positive ? "text-success" : "text-danger"}`}>
-                          {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
-                        </span>
-                      </button>
+                      <div key={r.id} className="flex items-center hover:bg-default transition-colors group">
+                        <button
+                          type="button"
+                          onClick={() => applySuggestion(r)}
+                          className="flex-1 flex items-center justify-between gap-3 px-3 py-2.5 text-left min-w-0"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                            <p className="text-xs text-muted truncate">
+                              {r.accountName}
+                              {r.category ? ` · ${r.category.name}` : ""}
+                              {r.counterParty && r.note ? ` · ${r.counterParty}` : ""}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-mono font-semibold shrink-0 ${positive ? "text-success" : "text-danger"}`}>
+                            {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onGoToRecord(r.id)}
+                          title="Go to this record"
+                          className="px-3 py-2.5 text-muted hover:text-foreground transition-colors shrink-0 border-l border-border"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

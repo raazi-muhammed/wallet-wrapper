@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "heroui-tabs-app",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/raazimuhammed/Documents/GitHub/heroui-tabs-app && npm run dev"],
+      "port": 3000
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
+import { AddRecordButton } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -350,6 +351,13 @@ export default function Home() {
           <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
             {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
+            {token && (
+              <AddRecordButton
+                token={token}
+                accounts={accounts.filter((a) => !a.archived)}
+                onSuccess={() => loadData(token)}
+              />
+            )}
             <SettingsPopover
               token={token}
               stats={stats}

@@ -82,3 +82,21 @@ export interface WalletRecord {
     group?: { id: string; name: string };
   };
 }
+
+export interface Category {
+  id: string;
+  name: string;
+  color?: string;
+  categoryType?: string;
+  group?: { id: string; name: string };
+}
+
+export async function fetchCategories(token: string) {
+  const res = await fetch(`${BASE}/categories`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Categories: ${res.status}`);
+  const data = await res.json();
+  return (data.categories ?? data) as Category[];
+}

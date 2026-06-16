@@ -19,3 +19,22 @@ export async function GET(req: NextRequest) {
   const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
+
+export async function POST(req: NextRequest) {
+  const token = req.headers.get("x-wallet-token");
+  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
+
+  const body = await req.json();
+
+  const res = await fetch(`${BASE}/v1/api/records`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+  return NextResponse.json(data, { status: res.status });
+}

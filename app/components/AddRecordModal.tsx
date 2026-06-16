@@ -34,8 +34,8 @@ export function AddRecordButton({ token, accounts, onSuccess }: Props) {
       </Button>
       <Modal state={state}>
         <Modal.Backdrop />
-        <Modal.Container size="lg">
-          <Modal.Dialog>
+        <Modal.Container scroll="inside">
+          <Modal.Dialog style={{ maxWidth: "720px", width: "100%" }}>
             <AddRecordForm
               token={token}
               accounts={accounts}

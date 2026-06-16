@@ -33,17 +33,18 @@ export function AddRecordButton({ token, accounts, onSuccess }: Props) {
         + Add Record
       </Button>
       <Modal state={state}>
-        <Modal.Backdrop />
-        <Modal.Container scroll="inside">
-          <Modal.Dialog style={{ maxWidth: "720px", width: "100%" }}>
-            <AddRecordForm
-              token={token}
-              accounts={accounts}
-              onSuccess={() => { state.close(); onSuccess(); }}
-              onCancel={state.close}
-            />
-          </Modal.Dialog>
-        </Modal.Container>
+        <Modal.Backdrop>
+          <Modal.Container scroll="inside">
+            <Modal.Dialog style={{ maxWidth: "720px", width: "100%" }}>
+              <AddRecordForm
+                token={token}
+                accounts={accounts}
+                onSuccess={() => { state.close(); onSuccess(); }}
+                onCancel={state.close}
+              />
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </>
   );

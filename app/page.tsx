@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
-import { AddRecordButton } from "./components/AddRecordModal";
+import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ function AccountCard({ account }: { account: Account }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; highlightedId?: string }) {
+function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -246,6 +246,7 @@ function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; hig
             <Table.Column>Payee</Table.Column>
             <Table.Column>Payment</Table.Column>
             <Table.Column>Amount</Table.Column>
+            <Table.Column>{""}</Table.Column>
           </Table.Header>
           <Table.Body items={records}>
             {(r) => {
@@ -281,6 +282,17 @@ function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; hig
                       {positive ? "+" : ""}{fmt(value, currencyCode)}
                     </span>
                   </Table.Cell>
+                  <Table.Cell>
+                    <button
+                      onClick={() => onEdit(r)}
+                      className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-default transition-colors"
+                      aria-label="Edit record"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </Table.Cell>
                 </Table.Row>
               );
             }}
@@ -302,6 +314,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
+  const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -442,10 +455,23 @@ export default function Home() {
                 </Select.Popover>
               </Select>
             </div>
-            <RecordsTable records={displayedRecords} highlightedId={highlightedId} />
+            <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
           </section>
         )}
       </main>
+
+      {editingRecord && (
+        <EditRecordModal
+          token={token}
+          accounts={accounts.filter((a) => !a.archived)}
+          records={records}
+          record={editingRecord}
+          isOpen={!!editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSuccess={() => { setEditingRecord(null); loadData(token); }}
+          onGoToRecord={handleGoToRecord}
+        />
+      )}
     </div>
   );
 }

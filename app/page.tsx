@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card, Table, Select, ListBox, ListBoxItem, Popover, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
+import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import type { ComponentType } from "react";
@@ -57,6 +57,7 @@ function SettingsPopover({
   onSave: (t: string) => void;
   onDisconnect: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(token);
 
   useEffect(() => { setDraft(token); }, [token]);
@@ -64,93 +65,107 @@ function SettingsPopover({
   const used = stats ? stats.rateLimit - stats.rateLimitRemaining : null;
   const pct = stats ? Math.round((used! / stats.rateLimit) * 100) : null;
 
+  function handleSaveAndClose(t: string) {
+    onSave(t);
+    setOpen(false);
+  }
+
+  function handleDisconnectAndClose() {
+    onDisconnect();
+    setOpen(false);
+  }
+
   return (
-    <Popover placement="bottom-end">
-      <Popover.Trigger>
-        <button className="flex items-center justify-center size-8 rounded-full bg-default hover:bg-default-hover text-muted transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4">
-            <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4Z"/>
-          </svg>
-        </button>
-      </Popover.Trigger>
-      <Popover.Dialog className="w-80">
-        <Popover.Content className="space-y-4 p-4">
-          <Popover.Heading className="text-sm font-semibold text-foreground">API Connection</Popover.Heading>
+    <>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="API settings"
+        className="flex items-center justify-center size-8 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4">
+          <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4Z"/>
+        </svg>
+      </button>
 
-          {/* Token input */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-muted uppercase tracking-widest">Bearer Token</label>
-            <input
-              type="password"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onSave(draft)}
-              placeholder="Paste your token…"
-              className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-            />
-          </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed top-14 right-4 z-50 w-80 rounded-xl border border-border bg-background shadow-lg space-y-4 p-4">
+            <p className="text-sm font-semibold text-foreground">API Connection</p>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => onSave(draft)}
-              disabled={!draft}
-              className="flex-1 py-2 rounded-lg bg-accent text-accent-foreground text-xs font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
-            >
-              Connect
-            </button>
-            {token && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-muted uppercase tracking-widest">Bearer Token</label>
+              <input
+                type="password"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && draft && handleSaveAndClose(draft)}
+                placeholder="Paste your token…"
+                autoFocus
+                className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+
+            <div className="flex gap-2">
               <button
-                onClick={onDisconnect}
-                className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
+                onClick={() => handleSaveAndClose(draft)}
+                disabled={!draft}
+                className="flex-1 py-2 rounded-lg bg-accent text-accent-foreground text-xs font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
               >
-                Disconnect
+                Connect
               </button>
-            )}
-          </div>
+              {token && (
+                <button
+                  onClick={handleDisconnectAndClose}
+                  className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
 
-          {/* Stats */}
-          {stats && (
-            <div className="border-t border-separator pt-4 space-y-3">
-              <p className="text-xs font-semibold text-muted uppercase tracking-widest">API Usage Stats</p>
+            {stats && (
+              <div className="border-t border-separator pt-4 space-y-3">
+                <p className="text-xs font-semibold text-muted uppercase tracking-widest">API Usage Stats</p>
 
-              {/* Rate limit bar */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs text-muted">
-                  <span>Rate limit</span>
-                  <span className="font-mono text-foreground">{used} / {stats.rateLimit} req/hr</span>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted">
+                    <span>Rate limit</span>
+                    <span className="font-mono text-foreground">{used} / {stats.rateLimit} req/hr</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-default overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${pct! > 80 ? "bg-danger" : "bg-success"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 rounded-full bg-default overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${pct! > 80 ? "bg-danger" : "bg-success"}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-default p-2.5 space-y-0.5">
-                  <p className="text-muted">Last change</p>
-                  <p className="text-foreground font-medium">
-                    {stats.lastDataChangeAt ? fmtRelative(stats.lastDataChangeAt) : "—"}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-default p-2.5 space-y-0.5">
-                  <p className="text-muted">Revision</p>
-                  <p className="text-foreground font-medium font-mono">{stats.lastDataChangeRev ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-default p-2.5 space-y-0.5 col-span-2">
-                  <p className="text-muted">Sync status</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`size-2 rounded-full ${stats.syncInProgress ? "bg-warning animate-pulse" : "bg-success"}`} />
-                    <p className="text-foreground font-medium">{stats.syncInProgress ? "Syncing…" : "Up to date"}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg bg-default p-2.5 space-y-0.5">
+                    <p className="text-muted">Last change</p>
+                    <p className="text-foreground font-medium">
+                      {stats.lastDataChangeAt ? fmtRelative(stats.lastDataChangeAt) : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-default p-2.5 space-y-0.5">
+                    <p className="text-muted">Revision</p>
+                    <p className="text-foreground font-medium font-mono">{stats.lastDataChangeRev ?? "—"}</p>
+                  </div>
+                  <div className="rounded-lg bg-default p-2.5 space-y-0.5 col-span-2">
+                    <p className="text-muted">Sync status</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`size-2 rounded-full ${stats.syncInProgress ? "bg-warning animate-pulse" : "bg-success"}`} />
+                      <p className="text-foreground font-medium">{stats.syncInProgress ? "Syncing…" : "Up to date"}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-        </Popover.Content>
-      </Popover.Dialog>
-    </Popover>
+            )}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

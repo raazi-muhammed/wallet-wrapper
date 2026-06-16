@@ -233,7 +233,7 @@ function RecordForm({
       recordType,
       recordState,
     };
-    if (categoryId) payload.categoryId = categoryId;
+    if (categoryId) payload.category = { id: categoryId };
     if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
     try {
@@ -254,7 +254,8 @@ function RecordForm({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.message ?? `HTTP ${res.status}`);
+        const msg = err?.message ?? err?.error ?? err?.errors?.[0]?.message ?? JSON.stringify(err);
+        throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
       if (addAnother) {

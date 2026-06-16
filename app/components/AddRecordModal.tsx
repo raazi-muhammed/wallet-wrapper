@@ -248,7 +248,7 @@ function RecordForm({
         res = await fetch("/api/wallet/records", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify({ records: [payload] }),
+          body: JSON.stringify([payload]),
         });
       }
 

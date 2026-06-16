@@ -242,7 +242,8 @@ function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; hig
             <Table.Column isRowHeader>Date</Table.Column>
             <Table.Column>Account</Table.Column>
             <Table.Column>Category</Table.Column>
-            <Table.Column>Note / Payee</Table.Column>
+            <Table.Column>Note</Table.Column>
+            <Table.Column>Payee</Table.Column>
             <Table.Column>Payment</Table.Column>
             <Table.Column>Amount</Table.Column>
           </Table.Header>
@@ -250,7 +251,6 @@ function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; hig
             {(r) => {
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
-              const label = r.note ?? r.counterParty ?? "—";
               const highlighted = r.id === highlightedId;
               return (
                 <Table.Row key={r.id} id={r.id} data-record-id={r.id} className={highlighted ? "outline outline-2 outline-accent" : ""}>
@@ -261,7 +261,16 @@ function RecordsTable({ records, highlightedId }: { records: WalletRecord[]; hig
                       ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
                       : <span className="text-muted">—</span>}
                   </Table.Cell>
-                  <Table.Cell><span className="block max-w-[160px] truncate">{label}</span></Table.Cell>
+                  <Table.Cell>
+                    {r.note
+                      ? <span className="block max-w-[160px] truncate">{r.note}</span>
+                      : <span className="text-muted">—</span>}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {r.counterParty
+                      ? <span className="block max-w-[120px] truncate">{r.counterParty}</span>
+                      : <span className="text-muted">—</span>}
+                  </Table.Cell>
                   <Table.Cell>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted capitalize whitespace-nowrap">
                       {r.paymentType.replace(/_/g, " ")}

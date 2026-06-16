@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "heroui-tabs-app",
+      "name": "wallet-wrapper",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd /Users/raazimuhammed/Documents/GitHub/heroui-tabs-app && npm run dev -- --port $PORT"],
+      "runtimeArgs": ["-c", "cd /Users/raazimuhammed/Documents/GitHub/wallet-wrapper && npm run dev -- --port $PORT"],
       "port": 3000,
       "autoPort": true
     }

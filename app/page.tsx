@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
+  Wallet,
+  Banknote,
+  Landmark,
+  PiggyBank,
+  CreditCard,
+  TrendingUp,
+  Shield,
   CircleDashed,
-  Info,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  ExternalLink,
 } from "lucide-react";
 import {
   Table,
@@ -51,13 +53,13 @@ function fmtRelative(iso: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TYPE_ICONS: Record<string, ComponentType<any>> = {
-  General: CircleDashed,
-  Cash: CheckCircle,
-  CurrentAccount: Info,
-  SavingAccount: Info,
-  CreditCard: XCircle,
-  Investment: ExternalLink,
-  Insurance: AlertTriangle,
+  General: Wallet,
+  Cash: Banknote,
+  CurrentAccount: Landmark,
+  SavingAccount: PiggyBank,
+  CreditCard: CreditCard,
+  Investment: TrendingUp,
+  Insurance: Shield,
 };
 
 // ── Settings Popover ──────────────────────────────────────────────────────────

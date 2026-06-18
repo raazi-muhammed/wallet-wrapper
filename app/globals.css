@@ -1,19 +1,49 @@
 @import "tailwindcss";
-@import "@heroui/react/styles";
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
+
+  /* ── Core surfaces ─────────────────────────── */
+  --color-background:      oklch(0.09 0 0);
+  --color-foreground:      oklch(0.97 0 0);
+  --color-default:         oklch(0.16 0 0);
+  --color-default-hover:   oklch(0.21 0 0);
+  --color-border:          oklch(0.22 0 0);
+  --color-separator:       oklch(0.22 0 0);
+  --color-input:           oklch(0.22 0 0);
+  --color-ring:            oklch(0.55 0.22 264);
+  --color-popover:         oklch(0.12 0 0);
+  --color-popover-foreground: oklch(0.97 0 0);
+
+  /* ── Text ──────────────────────────────────── */
+  --color-muted:            oklch(0.53 0 0);
+  --color-muted-foreground: oklch(0.53 0 0);
+
+  /* ── Accent / primary (blue) ───────────────── */
+  --color-accent:           oklch(0.55 0.22 264);
+  --color-accent-hover:     oklch(0.48 0.22 264);
+  --color-accent-foreground: oklch(0.99 0 0);
+  --color-primary:          oklch(0.55 0.22 264);
+  --color-primary-foreground: oklch(0.99 0 0);
+
+  /* ── Card / secondary ──────────────────────── */
+  --color-card:             oklch(0.12 0 0);
+  --color-card-foreground:  oklch(0.97 0 0);
+  --color-secondary:        oklch(0.16 0 0);
+  --color-secondary-foreground: oklch(0.97 0 0);
+
+  /* ── Semantic ──────────────────────────────── */
+  --color-success:                oklch(0.65 0.18 145);
+  --color-warning:                oklch(0.75 0.17 85);
+  --color-danger:                 oklch(0.63 0.22 25);
+  --color-danger-soft:            oklch(0.63 0.22 25 / 0.12);
+  --color-danger-soft-foreground: oklch(0.78 0.14 25);
+  --color-destructive:            oklch(0.63 0.22 25);
+  --color-destructive-foreground: oklch(0.97 0 0);
 }
 
-/* Keep Popover.Dialog out of normal flow so it doesn't affect sibling layout */
-[data-slot="popover-dialog"] {
-  position: absolute !important;
-}
-
-/* Make all field inputs match CategorySelect: dark bg + visible border */
-.dark {
-  --field-background: var(--background);
-  --field-border: var(--border);
-  --field-border-width: 1px;
-  --number-field-group-bg: var(--background);
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
 }

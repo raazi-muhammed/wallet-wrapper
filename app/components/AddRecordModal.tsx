@@ -18,7 +18,7 @@ import {
   DatePicker,
   Calendar,
 } from "@heroui/react";
-import { parseAbsoluteToLocal } from "@internationalized/date";
+import { parseAbsoluteToLocal, getLocalTimeZone, today } from "@internationalized/date";
 import type { ZonedDateTime } from "@internationalized/date";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
@@ -438,7 +438,7 @@ function RecordForm({
               <div className="flex gap-2">
                 <NumberField
                   minValue={0}
-                  step={0.01}
+                  step={1}
                   value={amount ?? NaN}
                   onChange={(v) => setAmount(isNaN(v) ? undefined : v)}
                   aria-label="Amount"
@@ -508,6 +508,21 @@ function RecordForm({
                   </Calendar>
                 </DatePicker.Popover>
               </DatePicker>
+              <div className="flex gap-2 mt-2">
+                {[
+                  { label: "Today", date: today(getLocalTimeZone()) },
+                  { label: "Yesterday", date: today(getLocalTimeZone()).subtract({ days: 1 }) },
+                ].map(({ label, date }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setRecordDate(recordDate.set({ year: date.year, month: date.month, day: date.day }))}
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

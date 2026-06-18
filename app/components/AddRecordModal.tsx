@@ -12,7 +12,6 @@ import {
   Tabs,
   NumberField,
   TextArea,
-  Separator,
   Spinner,
   DateField,
   DatePicker,
@@ -528,11 +527,6 @@ function RecordForm({
 
           {/* Right column */}
           <div className="lg:w-72 space-y-4">
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-semibold text-foreground shrink-0">Other details</p>
-              <Separator className="flex-1" />
-            </div>
-
             <div className="relative">
               <label className="block text-xs font-semibold text-foreground mb-1.5">Note</label>
               <TextArea
@@ -554,19 +548,22 @@ function RecordForm({
                     const positive = r.amount.value > 0;
                     return (
                       <div key={r.id} className="flex items-center hover:bg-default transition-colors">
-                        <button type="button" onClick={() => applySuggestion(r)} className="flex-1 flex items-center justify-between gap-3 px-3 py-2.5 text-left min-w-0">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                        <button type="button" onClick={() => applySuggestion(r)} className="flex-1 px-3 py-2.5 text-left min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{r.note || "—"}</p>
+                          {(r.counterParty || r.category) && (
                             <p className="text-xs text-muted truncate">
-                              {r.accountName}{r.category ? ` · ${r.category.name}` : ""}{r.counterParty && r.note ? ` · ${r.counterParty}` : ""}
+                              {[r.counterParty, r.category?.name].filter(Boolean).join(" · ")}
                             </p>
+                          )}
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="text-xs text-muted truncate">{r.accountName}{r.category ? ` · ${r.category.name}` : ""}</p>
+                            <span className={`text-xs font-mono shrink-0 ${positive ? "text-success" : "text-danger"}`}>
+                              {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
+                            </span>
                           </div>
-                          <span className={`text-sm font-mono font-semibold shrink-0 ${positive ? "text-success" : "text-danger"}`}>
-                            {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
-                          </span>
                         </button>
-                        <button type="button" onClick={() => onGoToRecord(r.id)} title="Go to this record" className="px-3 py-2.5 text-muted hover:text-foreground transition-colors shrink-0 border-l border-border">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <button type="button" onClick={() => onGoToRecord(r.id)} title="Go to this record" className="px-2 py-2.5 text-muted hover:text-foreground transition-colors shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                           </svg>
                         </button>

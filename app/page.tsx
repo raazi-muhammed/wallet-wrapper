@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
+import { Card, Table, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
@@ -204,27 +204,50 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
   );
 }
 
-// ── Account Card ──────────────────────────────────────────────────────────────
+// ── Sidebar Account Item ──────────────────────────────────────────────────────
 
-function AccountCard({ account }: { account: Account }) {
+function SidebarAccountItem({
+  account,
+  recordCount,
+  selected,
+  onClick,
+}: {
+  account: Account;
+  recordCount: number;
+  selected: boolean;
+  onClick: () => void;
+}) {
   const { currentBalance, currencyCode } = account.balance;
   const Icon = TYPE_ICONS[account.accountType] ?? CircleDashedIcon;
+  const positive = currentBalance >= 0;
 
   return (
-    <Card>
-      <Card.Header>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <Icon className="size-4 text-muted shrink-0" />
-            <Card.Title>{account.name}</Card.Title>
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
+        selected
+          ? "bg-accent/15 text-foreground"
+          : "text-muted hover:bg-default hover:text-foreground"
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        <Icon className={`size-3.5 shrink-0 ${selected ? "text-accent" : "text-muted group-hover:text-foreground"}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-sm font-medium truncate">{account.name}</span>
+            <span className="text-xs font-mono text-muted shrink-0">{currencyCode}</span>
           </div>
-          <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-default text-muted">{currencyCode}</span>
+          <div className="flex items-center justify-between gap-1 mt-0.5">
+            <span className={`text-xs font-mono tabular-nums ${positive ? "text-success" : "text-danger"}`}>
+              {fmt(currentBalance, currencyCode)}
+            </span>
+            {recordCount > 0 && (
+              <span className="text-xs text-muted shrink-0">{recordCount}</span>
+            )}
+          </div>
         </div>
-      </Card.Header>
-      <Card.Content>
-        <p className="text-2xl font-bold tabular-nums text-foreground">{fmt(currentBalance, currencyCode)}</p>
-      </Card.Content>
-    </Card>
+      </div>
+    </button>
   );
 }
 
@@ -309,8 +332,10 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<WalletRecord[]>([]);
+  const [allRecords, setAllRecords] = useState<WalletRecord[]>([]);
   const [stats, setStats] = useState<ApiStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recordsLoading, setRecordsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
@@ -335,6 +360,8 @@ export default function Home() {
       ]);
       setAccounts(accts);
       setRecords(recs);
+      setAllRecords(recs);
+      setSelectedAccount("all");
       setStats(apiStats);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch data");
@@ -342,6 +369,23 @@ export default function Home() {
       setLoading(false);
     }
   }, []);
+
+  const handleAccountSelect = useCallback(async (accountId: string) => {
+    setSelectedAccount(accountId);
+    if (accountId === "all") {
+      setRecords(allRecords);
+      return;
+    }
+    setRecordsLoading(true);
+    try {
+      const recs = await fetchRecords(token, accountId);
+      setRecords(recs);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to fetch records");
+    } finally {
+      setRecordsLoading(false);
+    }
+  }, [token, allRecords]);
 
   function handleSave(t: string) {
     localStorage.setItem("wallet_token", t);
@@ -358,9 +402,11 @@ export default function Home() {
     setError("");
   }
 
-  function handleGoToRecord(id: string) {
-    const rec = records.find((r) => r.id === id);
-    if (rec) setSelectedAccount(rec.accountId);
+  async function handleGoToRecord(id: string) {
+    const rec = allRecords.find((r) => r.id === id);
+    if (rec && rec.accountId !== selectedAccount) {
+      await handleAccountSelect(rec.accountId);
+    }
     setHighlightedId(id);
     setTimeout(() => {
       const el = document.querySelector(`[data-record-id="${id}"]`);
@@ -372,17 +418,18 @@ export default function Home() {
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
 
-  const displayedRecords =
-    selectedAccount === "all"
-      ? sorted(records)
-      : sorted(records.filter((r) => r.accountId === selectedAccount));
-
+  const displayedRecords = sorted(records);
   const activeAccounts = accounts.filter((a) => !a.archived);
 
+  const selectedAccountName =
+    selectedAccount === "all"
+      ? "All Accounts"
+      : activeAccounts.find((a) => a.id === selectedAccount)?.name ?? "Records";
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Navbar */}
-      <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
+      <header className="shrink-0 z-10 border-b border-border bg-background/80 backdrop-blur">
         <div className="relative w-full px-4 h-14 flex items-center">
           <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
@@ -406,59 +453,77 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-10 space-y-10">
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
-            {error}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!token && <TokenConnectForm onSave={handleSave} />}
-
-        {/* Accounts */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
         {activeAccounts.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">Accounts</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {activeAccounts.map((a) => <AccountCard key={a.id} account={a} />)}
+          <aside className="w-64 shrink-0 border-r border-border flex flex-col overflow-hidden">
+            <div className="px-4 py-4 shrink-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted">Accounts</p>
             </div>
-          </section>
+            <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
+              {/* All accounts */}
+              <button
+                onClick={() => handleAccountSelect("all")}
+                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                  selectedAccount === "all"
+                    ? "bg-accent/15 text-foreground"
+                    : "text-muted hover:bg-default hover:text-foreground"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">All Accounts</span>
+                  <span className="text-xs text-muted">{allRecords.length}</span>
+                </div>
+              </button>
+
+              <div className="my-2 border-t border-border" />
+
+              {activeAccounts.map((a) => {
+                const count = allRecords.filter((r) => r.accountId === a.id).length;
+                return (
+                  <SidebarAccountItem
+                    key={a.id}
+                    account={a}
+                    recordCount={count}
+                    selected={selectedAccount === a.id}
+                    onClick={() => handleAccountSelect(a.id)}
+                  />
+                );
+              })}
+            </nav>
+          </aside>
         )}
 
-        {/* Records */}
-        {(activeAccounts.length > 0 || records.length > 0) && (
-          <section ref={recordsSectionRef} className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">
-                Records <span className="normal-case font-normal">(last 3 months)</span>
-              </h2>
-              <Select
-                selectedKey={selectedAccount}
-                onSelectionChange={(key) => setSelectedAccount(key as string)}
-                aria-label="Filter by account"
-                className="w-56"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBoxItem id="all">All accounts ({records.length})</ListBoxItem>
-                    {activeAccounts.map((a) => {
-                      const count = records.filter((r) => r.accountId === a.id).length;
-                      return <ListBoxItem key={a.id} id={a.id}>{a.name} ({count})</ListBoxItem>;
-                    })}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+        {/* Main content */}
+        <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
+          {/* Error */}
+          {error && (
+            <div className="mx-6 mt-6 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
+              {error}
             </div>
-            <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
-          </section>
-        )}
-      </main>
+          )}
+
+          {/* Empty state */}
+          {!token && <TokenConnectForm onSave={handleSave} />}
+
+          {/* Records */}
+          {(activeAccounts.length > 0 || records.length > 0) && (
+            <div className="px-6 py-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    {recordsLoading
+                      ? "Loading…"
+                      : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · last 3 months`}
+                  </p>
+                </div>
+              </div>
+              <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
+            </div>
+          )}
+        </main>
+      </div>
 
       {editingRecord && (
         <EditRecordModal

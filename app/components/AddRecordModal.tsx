@@ -481,14 +481,14 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Date &amp; Time</label>
-              <DatePicker granularity="minute" value={recordDate} onChange={(v) => { if (v) setRecordDate(v); }} aria-label="Date & Time">
+              <DatePicker granularity="minute" value={recordDate} onChange={(v) => { if (v) setRecordDate(v); }} aria-label="Date & Time" className="w-full">
                 <DateField.Group fullWidth>
-                  <DateField.Input>
-                    {(segment) => <DateField.Segment segment={segment} />}
-                  </DateField.Input>
-                  <DatePicker.Trigger aria-label="Open calendar">
+                  <DatePicker.Trigger aria-label="Open calendar" className="pl-3">
                     <DatePicker.TriggerIndicator />
                   </DatePicker.Trigger>
+                  <DateField.Input>
+                    {(segment) => segment.type === "timeZoneName" ? <span /> : <DateField.Segment segment={segment} />}
+                  </DateField.Input>
                 </DateField.Group>
                 <DatePicker.Popover>
                   <Calendar>

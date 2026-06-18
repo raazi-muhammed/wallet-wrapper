@@ -9,3 +9,11 @@
 [data-slot="popover-dialog"] {
   position: absolute !important;
 }
+
+/* Make all field inputs match CategorySelect: dark bg + visible border */
+.dark {
+  --field-background: var(--background);
+  --field-border: var(--border);
+  --field-border-width: 1px;
+  --number-field-group-bg: var(--background);
+}

@@ -9,7 +9,17 @@ import {
   ListBox,
   ListBoxItem,
   useOverlayState,
+  Tabs,
+  NumberField,
+  TextArea,
+  Separator,
+  Spinner,
+  DateField,
+  DatePicker,
+  Calendar,
 } from "@heroui/react";
+import { parseAbsoluteToLocal } from "@internationalized/date";
+import type { ZonedDateTime } from "@internationalized/date";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
 
@@ -277,7 +287,7 @@ function RecordForm({
   };
 
   const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
-  const [amount, setAmount] = useState(() => initialRecord ? Math.abs(initialRecord.amount.value).toString() : "");
+  const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
   const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? accounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
@@ -285,7 +295,7 @@ function RecordForm({
   const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
   const [paymentType, setPaymentType] = useState(() => initialRecord?.paymentType ?? "cash");
   const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
-  const [recordDate, setRecordDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [recordDate, setRecordDate] = useState<ZonedDateTime>(() => parseAbsoluteToLocal(new Date().toISOString()));
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -333,7 +343,7 @@ function RecordForm({
   function applySuggestion(r: WalletRecord) {
     setNote(r.note ?? "");
     setPayer(r.counterParty ?? "");
-    setAmount(Math.abs(r.amount.value).toString());
+    setAmount(Math.abs(r.amount.value));
     setAccountId(r.accountId);
     if (r.category?.id) setCategoryId(r.category.id);
     const rt = deriveType(r);
@@ -341,11 +351,6 @@ function RecordForm({
     setPaymentType(r.paymentType ?? "Cash");
     if (r.recordState) setRecordState(r.recordState);
     setShowSuggestions(false);
-  }
-
-  function handleNoteChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setNote(e.target.value);
-    setShowSuggestions(true);
   }
 
   function handleNoteBlur() {
@@ -357,19 +362,18 @@ function RecordForm({
   }
 
   async function submit(addAnother: boolean) {
-    if (!amount || !accountId) return;
+    if (amount === undefined || !accountId) return;
     setSubmitting(true);
     setError("");
 
-    const numAmount = parseFloat(amount);
-    const signedAmount = recordType === "expense" ? -Math.abs(numAmount) : Math.abs(numAmount);
+    const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
 
     const payload: Record<string, unknown> = {
       accountId,
       note: note || undefined,
       counterParty: payer || undefined,
       amount: { value: signedAmount, currencyCode },
-      recordDate: new Date(recordDate).toISOString(),
+      recordDate: recordDate.toDate().toISOString(),
       paymentType,
       recordState,
     };
@@ -399,7 +403,7 @@ function RecordForm({
       }
 
       if (addAnother) {
-        setAmount(""); setNote(""); setPayer(""); setCategoryId("");
+        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
       } else {
         onSuccess();
       }
@@ -421,27 +425,32 @@ function RecordForm({
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column */}
           <div className="flex-1 space-y-4">
-            <div className="flex rounded-xl overflow-hidden border border-border">
-              {(["expense", "income", "transfer"] as RecordType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setRecordType(t)}
-                  className={`flex-1 py-2 text-sm font-semibold capitalize transition-colors ${
-                    recordType === t
-                      ? t === "expense" ? "bg-danger text-white" : "bg-success text-white"
-                      : "bg-background text-muted hover:bg-default"
-                  }`}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </button>
-              ))}
-            </div>
+            <Tabs selectedKey={recordType} onSelectionChange={(k) => setRecordType(k as RecordType)}>
+              <Tabs.List>
+                <Tabs.Tab id="expense" className="data-[selected]:bg-danger data-[selected]:text-white">Expense</Tabs.Tab>
+                <Tabs.Tab id="income" className="data-[selected]:bg-success data-[selected]:text-white">Income</Tabs.Tab>
+                <Tabs.Tab id="transfer">Transfer</Tabs.Tab>
+              </Tabs.List>
+            </Tabs>
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Amount <span className="text-danger">*</span></label>
               <div className="flex gap-2">
-                <Input type="number" min="0" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="flex-1" aria-label="Amount" />
-                <div className="w-24 flex items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-mono text-muted">
+                <NumberField
+                  minValue={0}
+                  step={0.01}
+                  value={amount ?? NaN}
+                  onChange={(v) => setAmount(isNaN(v) ? undefined : v)}
+                  aria-label="Amount"
+                  className="flex-1"
+                >
+                  <NumberField.Group>
+                    <NumberField.DecrementButton />
+                    <NumberField.Input placeholder="0.00" />
+                    <NumberField.IncrementButton />
+                  </NumberField.Group>
+                </NumberField>
+                <div className="w-20 flex items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-mono text-muted">
                   {currencyCode}
                 </div>
               </div>
@@ -472,31 +481,56 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Date &amp; Time</label>
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <input type="datetime-local" value={recordDate} onChange={(e) => setRecordDate(e.target.value)} className="flex-1 bg-transparent text-sm text-foreground focus:outline-none" />
-              </div>
+              <DatePicker granularity="minute" value={recordDate} onChange={(v) => { if (v) setRecordDate(v); }} aria-label="Date & Time">
+                <DateField.Group fullWidth>
+                  <DateField.Input>
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DatePicker.Trigger aria-label="Open calendar">
+                    <DatePicker.TriggerIndicator />
+                  </DatePicker.Trigger>
+                </DateField.Group>
+                <DatePicker.Popover>
+                  <Calendar>
+                    <Calendar.Header>
+                      <Calendar.NavButton slot="previous" />
+                      <Calendar.Heading />
+                      <Calendar.NavButton slot="next" />
+                    </Calendar.Header>
+                    <Calendar.Grid>
+                      <Calendar.GridHeader>
+                        {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                      </Calendar.GridHeader>
+                      <Calendar.GridBody>
+                        {(date) => <Calendar.Cell date={date} />}
+                      </Calendar.GridBody>
+                    </Calendar.Grid>
+                  </Calendar>
+                </DatePicker.Popover>
+              </DatePicker>
             </div>
           </div>
 
           {/* Right column */}
           <div className="lg:w-72 space-y-4">
-            <p className="text-sm font-semibold text-foreground">Other details</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-semibold text-foreground shrink-0">Other details</p>
+              <Separator className="flex-1" />
+            </div>
 
             <div className="relative">
               <label className="block text-xs font-semibold text-foreground mb-1.5">Note</label>
-              <Input
+              <TextArea
                 placeholder="Describe your record"
                 value={note}
-                onChange={handleNoteChange}
+                onChange={(e) => { setNote(e.target.value); setShowSuggestions(true); }}
                 onFocus={() => note.trim() && setShowSuggestions(true)}
                 onBlur={handleNoteBlur}
                 fullWidth
                 aria-label="Note"
                 aria-autocomplete="list"
                 aria-expanded={showSuggestions && suggestions.length > 0}
+                rows={3}
               />
               {showSuggestions && suggestions.length > 0 && (
                 <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
@@ -560,11 +594,17 @@ function RecordForm({
 
       <Modal.Footer>
         <div className="flex flex-col gap-2 w-full">
-          <Button variant="primary" fullWidth onPress={() => submit(false)} isDisabled={!amount || !accountId || submitting}>
-            {submitting ? "Saving…" : mode === "edit" ? "Save changes" : "Add record"}
+          <Button variant="primary" fullWidth onPress={() => submit(false)} isDisabled={amount === undefined || !accountId || submitting}>
+            {submitting ? (
+              <span className="flex items-center gap-2">
+                <Spinner size="sm" /> Saving…
+              </span>
+            ) : (
+              mode === "edit" ? "Save changes" : "Add record"
+            )}
           </Button>
           {mode === "add" && (
-            <Button variant="outline" fullWidth onPress={() => submit(true)} isDisabled={!amount || !accountId || submitting}>
+            <Button variant="outline" fullWidth onPress={() => submit(true)} isDisabled={amount === undefined || !accountId || submitting}>
               Add and create another
             </Button>
           )}

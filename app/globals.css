@@ -42,8 +42,19 @@
   --color-destructive-foreground: oklch(0.97 0 0);
 }
 
+/* Border-radius scale — mapped so all rounded-* utilities are noticeably rounder */
+@theme inline {
+  --radius-xs:  0.625rem;  /* 10px */
+  --radius-sm:  0.75rem;   /* 12px */
+  --radius-md:  1rem;      /* 16px */
+  --radius-lg:  1.25rem;   /* 20px */
+  --radius-xl:  1.5rem;    /* 24px */
+  --radius-2xl: 1.875rem;  /* 30px */
+  --radius-3xl: 2.5rem;    /* 40px */
+}
+
 @layer base {
   :root {
-    --radius: 0.5rem;
+    --radius: 1rem;
   }
 }

@@ -1,7 +1,35 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import {
+  Loader2,
+  Utensils,
+  Car,
+  ShoppingBag,
+  Heart,
+  Plane,
+  BookOpen,
+  Briefcase,
+  ArrowLeftRight,
+  Shield,
+  Landmark,
+  Zap,
+  Home,
+  RefreshCw,
+  Gift,
+  Sparkles,
+  TrendingUp,
+  PawPrint,
+  Users,
+  Banknote,
+  Coffee,
+  Dumbbell,
+  Music,
+  Pill,
+  Wrench,
+  Tag,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +46,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
@@ -38,6 +71,42 @@ const RECORD_STATES: { id: string; label: string }[] = [
   { id: "uncleared", label: "Uncleared" },
   { id: "reconciled", label: "Reconciled" },
 ];
+
+const CATEGORY_ICON_MAP: Array<[RegExp, LucideIcon]> = [
+  [/food|meal|dining|restaurant|snack|fast.?food|lunch|dinner|breakfast|cafe|coffee|tea|drink|beverage|pizza|burger/i, Utensils],
+  [/coffee|cafe/i, Coffee],
+  [/groceri|supermarket|vegetable|fruit|market/i, ShoppingBag],
+  [/transport|vehicle|car|taxi|uber|bus|train|fuel|petrol|parking|auto|bike|metro|commute/i, Car],
+  [/shopping|cloth|fashion|apparel|accessory|mall|store/i, ShoppingBag],
+  [/health|medical|doctor|hospital|pharmacy|medicine|clinic|dental|vision/i, Heart],
+  [/pill|drug|supplement|vitamin/i, Pill],
+  [/gym|fitness|sport|exercise|workout/i, Dumbbell],
+  [/entertainment|movie|cinema|game|fun|leisure|netflix|streaming|music/i, Music],
+  [/travel|flight|hotel|vacation|holiday|trip|tourism|airbnb/i, Plane],
+  [/education|school|book|course|tuition|learning|college|university/i, BookOpen],
+  [/salary|income|wage|earning|paycheck|bonus/i, Briefcase],
+  [/transfer|sent|received/i, ArrowLeftRight],
+  [/insurance/i, Shield],
+  [/financial|bank|fee|charge|fine|tax|advisory|penalty/i, Landmark],
+  [/utility|electric|water|gas|internet|wifi|phone|bill/i, Zap],
+  [/rent|housing|home|mortgage|maintenance|repair/i, Home],
+  [/maintenance|repair|fix|service/i, Wrench],
+  [/subscription|membership/i, RefreshCw],
+  [/gift|donation|charity|contribution/i, Gift],
+  [/personal|beauty|care|hair|spa|salon/i, Sparkles],
+  [/invest|stock|mutual|fund|crypto|trading/i, TrendingUp],
+  [/pet|animal|vet/i, PawPrint],
+  [/family|kids|child|baby|parent/i, Users],
+  [/salary|income|earning/i, Banknote],
+];
+
+function getCategoryIcon(name: string, groupName?: string): LucideIcon {
+  const text = `${name} ${groupName ?? ""}`;
+  for (const [pattern, icon] of CATEGORY_ICON_MAP) {
+    if (pattern.test(text)) return icon;
+  }
+  return Tag;
+}
 
 function fmt(value: number, currency: string) {
   try {
@@ -133,7 +202,6 @@ function CategorySelect({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const blurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = categories.find((c) => c.id === value);
@@ -157,19 +225,6 @@ function CategorySelect({
     }
   }
 
-  function handleOpen() {
-    setOpen(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }
-
-  function handleBlur() {
-    blurRef.current = setTimeout(() => setOpen(false), 150);
-  }
-
-  function handleMouseDown() {
-    if (blurRef.current) clearTimeout(blurRef.current);
-  }
-
   function select(id: string) {
     onChange(id);
     setOpen(false);
@@ -177,77 +232,83 @@ function CategorySelect({
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={handleOpen}
-        onBlur={handleBlur}
-        className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setTimeout(() => inputRef.current?.focus(), 50); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+        >
+          {selected ? (
+            <span className="flex items-center gap-2 min-w-0">
+              {(() => { const Icon = getCategoryIcon(selected.name, selected.group?.name); return <Icon className="size-3.5 shrink-0 text-muted" />; })()}
+              <span className="truncate">{selected.name}</span>
+            </span>
+          ) : (
+            <span className="text-muted">Select category</span>
+          )}
+          <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 border-border bg-background w-[var(--radix-popover-trigger-width)] pointer-events-auto"
+        style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
+        align="start"
+        sideOffset={4}
       >
-        {selected ? (
-          <span className="flex items-center gap-2 min-w-0">
-            {selected.color && (
-              <span className="size-3 rounded-full shrink-0" style={{ background: selected.color }} />
-            )}
-            <span className="truncate">{selected.name}</span>
-          </span>
-        ) : (
-          <span className="text-muted">Select category</span>
-        )}
-        <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div onMouseDown={handleMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col" style={{ maxHeight: "280px" }}>
-          <div className="p-2 border-b border-border">
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search categories…"
-              className="w-full rounded-lg border border-border bg-background text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-            />
-          </div>
-          <div className="overflow-y-auto">
-            {[...groups.entries()].map(([groupName, { items }]) => (
-              <div key={groupName}>
-                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-                  <span className="text-xs font-semibold text-muted uppercase tracking-wider">{groupName}</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-                {items.map((c) => (
+        <div className="p-2 border-b border-border shrink-0">
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search categories…"
+            className="w-full rounded-lg border border-border bg-background text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+        <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
+          {[...groups.entries()].map(([groupName, { items }]) => (
+            <div key={groupName}>
+              <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                <span className="text-xs font-semibold text-muted uppercase tracking-wider">{groupName}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              {items.map((c) => {
+                const Icon = getCategoryIcon(c.name, groupName);
+                return (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => select(c.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
                   >
-                    {c.color && <span className="size-3 rounded-full shrink-0" style={{ background: c.color }} />}
+                    <Icon className="size-3.5 shrink-0 text-muted" />
                     <span className="truncate">{c.name}</span>
                   </button>
-                ))}
-              </div>
-            ))}
-            {ungrouped.map((c) => (
+                );
+              })}
+            </div>
+          ))}
+          {ungrouped.map((c) => {
+            const Icon = getCategoryIcon(c.name);
+            return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => select(c.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
               >
-                {c.color && <span className="size-3 rounded-full shrink-0" style={{ background: c.color }} />}
+                <Icon className="size-3.5 shrink-0 text-muted" />
                 <span className="truncate">{c.name}</span>
               </button>
-            ))}
-            {filtered.length === 0 && (
-              <p className="px-3 py-4 text-sm text-muted text-center">No categories found</p>
-            )}
-          </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <p className="px-3 py-4 text-sm text-muted text-center">No categories found</p>
+          )}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, Table, Select, ListBox, ListBoxItem, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
+import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -229,7 +230,7 @@ function AccountCard({ account }: { account: Account }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-function RecordsTable({ records }: { records: WalletRecord[] }) {
+function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -241,17 +242,19 @@ function RecordsTable({ records }: { records: WalletRecord[] }) {
             <Table.Column isRowHeader>Date</Table.Column>
             <Table.Column>Account</Table.Column>
             <Table.Column>Category</Table.Column>
-            <Table.Column>Note / Payee</Table.Column>
+            <Table.Column>Note</Table.Column>
+            <Table.Column>Payee</Table.Column>
             <Table.Column>Payment</Table.Column>
             <Table.Column>Amount</Table.Column>
+            <Table.Column>{""}</Table.Column>
           </Table.Header>
           <Table.Body items={records}>
             {(r) => {
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
-              const label = r.note ?? r.counterParty ?? "—";
+              const highlighted = r.id === highlightedId;
               return (
-                <Table.Row key={r.id} id={r.id}>
+                <Table.Row key={r.id} id={r.id} data-record-id={r.id} className={highlighted ? "outline outline-2 outline-accent" : ""}>
                   <Table.Cell>{fmtDate(r.recordDate)}</Table.Cell>
                   <Table.Cell>{r.accountName}</Table.Cell>
                   <Table.Cell>
@@ -259,7 +262,16 @@ function RecordsTable({ records }: { records: WalletRecord[] }) {
                       ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
                       : <span className="text-muted">—</span>}
                   </Table.Cell>
-                  <Table.Cell><span className="block max-w-[160px] truncate">{label}</span></Table.Cell>
+                  <Table.Cell>
+                    {r.note
+                      ? <span className="block max-w-[160px] truncate">{r.note}</span>
+                      : <span className="text-muted">—</span>}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {r.counterParty
+                      ? <span className="block max-w-[120px] truncate">{r.counterParty}</span>
+                      : <span className="text-muted">—</span>}
+                  </Table.Cell>
                   <Table.Cell>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted capitalize whitespace-nowrap">
                       {r.paymentType.replace(/_/g, " ")}
@@ -269,6 +281,17 @@ function RecordsTable({ records }: { records: WalletRecord[] }) {
                     <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
                       {positive ? "+" : ""}{fmt(value, currencyCode)}
                     </span>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <button
+                      onClick={() => onEdit?.(r)}
+                      className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-default transition-colors"
+                      aria-label="Edit record"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
                   </Table.Cell>
                 </Table.Row>
               );
@@ -290,6 +313,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
+  const [highlightedId, setHighlightedId] = useState<string | undefined>();
+  const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
+  const recordsSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const t = localStorage.getItem("wallet_token") ?? "";
@@ -332,6 +358,17 @@ export default function Home() {
     setError("");
   }
 
+  function handleGoToRecord(id: string) {
+    const rec = records.find((r) => r.id === id);
+    if (rec) setSelectedAccount(rec.accountId);
+    setHighlightedId(id);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-record-id="${id}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    setTimeout(() => setHighlightedId(undefined), 2500);
+  }
+
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
 
@@ -350,6 +387,15 @@ export default function Home() {
           <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
             {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
+            {token && (
+              <AddRecordButton
+                token={token}
+                accounts={activeAccounts}
+                records={records}
+                onSuccess={() => loadData(token)}
+                onGoToRecord={handleGoToRecord}
+              />
+            )}
             <SettingsPopover
               token={token}
               stats={stats}
@@ -383,7 +429,7 @@ export default function Home() {
 
         {/* Records */}
         {(activeAccounts.length > 0 || records.length > 0) && (
-          <section className="space-y-4">
+          <section ref={recordsSectionRef} className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">
                 Records <span className="normal-case font-normal">(last 3 months)</span>
@@ -409,10 +455,23 @@ export default function Home() {
                 </Select.Popover>
               </Select>
             </div>
-            <RecordsTable records={displayedRecords} />
+            <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
           </section>
         )}
       </main>
+
+      {editingRecord && (
+        <EditRecordModal
+          token={token}
+          accounts={activeAccounts}
+          records={records}
+          record={editingRecord}
+          isOpen={!!editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSuccess={() => { setEditingRecord(null); loadData(token); }}
+          onGoToRecord={handleGoToRecord}
+        />
+      )}
     </div>
   );
 }

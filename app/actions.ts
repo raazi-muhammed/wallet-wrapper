@@ -3,13 +3,21 @@
 const BASE = "https://rest.budgetbakers.com/wallet/v1/api";
 
 export async function fetchAccounts(token: string) {
-  const res = await fetch(`${BASE}/accounts`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Accounts: ${res.status}`);
-  const data = await res.json();
-  return (data.accounts ?? data) as Account[];
+  const all: Account[] = [];
+  let offset = 0;
+  while (true) {
+    const res = await fetch(`${BASE}/accounts?limit=200&offset=${offset}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Accounts: ${res.status}`);
+    const data = await res.json();
+    const page: Account[] = data.accounts ?? data;
+    all.push(...page);
+    if (!data.nextOffset || page.length === 0) break;
+    offset = data.nextOffset;
+  }
+  return all;
 }
 
 export async function fetchRecords(token: string) {
@@ -81,4 +89,22 @@ export interface WalletRecord {
     color?: string;
     group?: { id: string; name: string };
   };
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  color?: string;
+  categoryType?: string;
+  group?: { id: string; name: string };
+}
+
+export async function fetchCategories(token: string) {
+  const res = await fetch(`${BASE}/categories`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Categories: ${res.status}`);
+  const data = await res.json();
+  return (data.categories ?? data) as Category[];
 }

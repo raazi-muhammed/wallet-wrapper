@@ -20,8 +20,10 @@ export async function fetchAccounts(token: string) {
   return all;
 }
 
-export async function fetchRecords(token: string) {
-  const res = await fetch(`${BASE}/records?limit=200`, {
+export async function fetchRecords(token: string, accountId?: string) {
+  const params = new URLSearchParams({ limit: "200" });
+  if (accountId) params.set("accountId", accountId);
+  const res = await fetch(`${BASE}/records?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });

@@ -15,8 +15,20 @@ import type { Account, Category, WalletRecord } from "../actions";
 
 type RecordType = "expense" | "income" | "transfer";
 
-const PAYMENT_TYPES = ["Cash", "CreditCard", "DebitCard", "BankTransfer", "Voucher", "MobilePayment", "Other"];
-const RECORD_STATES = ["Cleared", "Uncleared", "Reconciled"];
+const PAYMENT_TYPES: { id: string; label: string }[] = [
+  { id: "cash", label: "Cash" },
+  { id: "debit_card", label: "Debit Card" },
+  { id: "credit_card", label: "Credit Card" },
+  { id: "transfer", label: "Transfer" },
+  { id: "voucher", label: "Voucher" },
+  { id: "mobile_payment", label: "Mobile Payment" },
+  { id: "web_payment", label: "Web Payment" },
+];
+const RECORD_STATES: { id: string; label: string }[] = [
+  { id: "cleared", label: "Cleared" },
+  { id: "uncleared", label: "Uncleared" },
+  { id: "reconciled", label: "Reconciled" },
+];
 
 function fmt(value: number, currency: string) {
   try {
@@ -106,6 +118,137 @@ export function EditRecordModal({ token, accounts, records, record, isOpen, onCl
   );
 }
 
+// ── Category Select ───────────────────────────────────────────────────────────
+
+function CategorySelect({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: Category[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const blurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = categories.find((c) => c.id === value);
+
+  const filtered = search.trim()
+    ? categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    : categories;
+
+  const groups = new Map<string, { groupId: string; items: Category[] }>();
+  const ungrouped: Category[] = [];
+  for (const c of filtered) {
+    if (c.group) {
+      const existing = groups.get(c.group.name);
+      if (existing) {
+        existing.items.push(c);
+      } else {
+        groups.set(c.group.name, { groupId: c.group.id, items: [c] });
+      }
+    } else {
+      ungrouped.push(c);
+    }
+  }
+
+  function handleOpen() {
+    setOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function handleBlur() {
+    blurRef.current = setTimeout(() => setOpen(false), 150);
+  }
+
+  function handleMouseDown() {
+    if (blurRef.current) clearTimeout(blurRef.current);
+  }
+
+  function select(id: string) {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleOpen}
+        onBlur={handleBlur}
+        className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 min-w-0">
+            {selected.color && (
+              <span className="size-3 rounded-full shrink-0" style={{ background: selected.color }} />
+            )}
+            <span className="truncate">{selected.name}</span>
+          </span>
+        ) : (
+          <span className="text-muted">Select category</span>
+        )}
+        <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div onMouseDown={handleMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col" style={{ maxHeight: "280px" }}>
+          <div className="p-2 border-b border-border">
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search categories…"
+              className="w-full rounded-lg border border-border bg-background text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          <div className="overflow-y-auto">
+            {[...groups.entries()].map(([groupName, { items }]) => (
+              <div key={groupName}>
+                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                  <span className="text-xs font-semibold text-muted uppercase tracking-wider">{groupName}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                {items.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => select(c.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+                  >
+                    {c.color && <span className="size-3 rounded-full shrink-0" style={{ background: c.color }} />}
+                    <span className="truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+            {ungrouped.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => select(c.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+              >
+                {c.color && <span className="size-3 rounded-full shrink-0" style={{ background: c.color }} />}
+                <span className="truncate">{c.name}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-sm text-muted text-center">No categories found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Shared Form ───────────────────────────────────────────────────────────────
 
 function RecordForm({
@@ -140,12 +283,9 @@ function RecordForm({
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
   const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
-  const [paymentType, setPaymentType] = useState(() => initialRecord?.paymentType ?? "Cash");
-  const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "Cleared");
-  const [recordDate, setRecordDate] = useState(() => {
-    if (initialRecord) return new Date(initialRecord.recordDate).toISOString().slice(0, 16);
-    return new Date().toISOString().slice(0, 16);
-  });
+  const [paymentType, setPaymentType] = useState(() => initialRecord?.paymentType ?? "cash");
+  const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
+  const [recordDate, setRecordDate] = useState(() => new Date().toISOString().slice(0, 16));
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -178,8 +318,9 @@ function RecordForm({
     const results: WalletRecord[] = [];
     for (const r of records) {
       if (mode === "edit" && r.id === initialRecord?.id) continue;
-      const label = (r.note ?? r.counterParty ?? "").toLowerCase();
-      if (!label.includes(q)) continue;
+      const noteText = (r.note ?? "").toLowerCase();
+      const payeeText = (r.counterParty ?? "").toLowerCase();
+      if (!noteText.includes(q) && !payeeText.includes(q)) continue;
       const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -230,10 +371,9 @@ function RecordForm({
       amount: { value: signedAmount, currencyCode },
       recordDate: new Date(recordDate).toISOString(),
       paymentType,
-      recordType,
       recordState,
     };
-    if (categoryId) payload.category = { id: categoryId };
+    if (categoryId) payload.categoryId = categoryId;
     if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
     try {
@@ -301,11 +441,8 @@ function RecordForm({
               <label className="block text-xs font-semibold text-foreground mb-1.5">Amount <span className="text-danger">*</span></label>
               <div className="flex gap-2">
                 <Input type="number" min="0" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="flex-1" aria-label="Amount" />
-                <div className="w-24">
-                  <Select selectedKey={currencyCode} aria-label="Currency">
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover><ListBox><ListBoxItem id={currencyCode}>{currencyCode}</ListBoxItem></ListBox></Select.Popover>
-                  </Select>
+                <div className="w-24 flex items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-mono text-muted">
+                  {currencyCode}
                 </div>
               </div>
             </div>
@@ -329,11 +466,8 @@ function RecordForm({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Category <span className="text-danger">*</span></label>
-              <Select selectedKey={categoryId || null} onSelectionChange={(k) => setCategoryId(k as string)} aria-label="Category" fullWidth>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover><ListBox>{filteredCategories.map((c) => <ListBoxItem key={c.id} id={c.id}>{c.name}</ListBoxItem>)}</ListBox></Select.Popover>
-              </Select>
+              <label className="block text-xs font-semibold text-foreground mb-1.5">Category</label>
+              <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
             </div>
 
             <div>
@@ -403,7 +537,7 @@ function RecordForm({
               <label className="block text-xs font-semibold text-foreground mb-1.5">Payment type</label>
               <Select selectedKey={paymentType} onSelectionChange={(k) => setPaymentType(k as string)} aria-label="Payment type" fullWidth>
                 <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover><ListBox>{PAYMENT_TYPES.map((t) => <ListBoxItem key={t} id={t}>{t.replace(/([A-Z])/g, " $1").trim()}</ListBoxItem>)}</ListBox></Select.Popover>
+                <Select.Popover><ListBox>{PAYMENT_TYPES.map((t) => <ListBoxItem key={t.id} id={t.id}>{t.label}</ListBoxItem>)}</ListBox></Select.Popover>
               </Select>
             </div>
 
@@ -411,7 +545,7 @@ function RecordForm({
               <label className="block text-xs font-semibold text-foreground mb-1.5">Payment status</label>
               <Select selectedKey={recordState} onSelectionChange={(k) => setRecordState(k as string)} aria-label="Payment status" fullWidth>
                 <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover><ListBox>{RECORD_STATES.map((s) => <ListBoxItem key={s} id={s}>{s}</ListBoxItem>)}</ListBox></Select.Popover>
+                <Select.Popover><ListBox>{RECORD_STATES.map((s) => <ListBoxItem key={s.id} id={s.id}>{s.label}</ListBoxItem>)}</ListBox></Select.Popover>
               </Select>
             </div>
           </div>

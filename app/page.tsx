@@ -390,7 +390,7 @@ export default function Home() {
             {token && (
               <AddRecordButton
                 token={token}
-                accounts={accounts.filter((a) => !a.archived)}
+                accounts={activeAccounts}
                 records={records}
                 onSuccess={() => loadData(token)}
                 onGoToRecord={handleGoToRecord}
@@ -463,7 +463,7 @@ export default function Home() {
       {editingRecord && (
         <EditRecordModal
           token={token}
-          accounts={accounts.filter((a) => !a.archived)}
+          accounts={activeAccounts}
           records={records}
           record={editingRecord}
           isOpen={!!editingRecord}

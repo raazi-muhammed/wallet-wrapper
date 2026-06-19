@@ -33,6 +33,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogContent,
@@ -141,7 +142,7 @@ export function AddRecordButton({ token, accounts, records, onSuccess, onGoToRec
         + Add Record
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[720px] w-full bg-background border-border p-0 overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
           <RecordForm
             mode="add"
             token={token}
@@ -173,7 +174,7 @@ interface EditProps {
 export function EditRecordModal({ token, accounts, records, record, isOpen, onClose, onSuccess, onGoToRecord }: EditProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-[720px] w-full bg-background border-border p-0 overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
         <RecordForm
           mode="edit"
           initialRecord={record}
@@ -236,7 +237,7 @@ function CategorySelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-full flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
@@ -252,18 +253,18 @@ function CategorySelect({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 border-border bg-background w-[var(--radix-popover-trigger-width)] pointer-events-auto"
+        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto"
         style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
         align="start"
         sideOffset={4}
       >
-        <div className="p-2 border-b border-border shrink-0">
+        <div className="p-2 shrink-0">
           <input
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search categories…"
-            className="w-full rounded-lg border border-border bg-background text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
         <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
@@ -348,7 +349,7 @@ function RecordForm({
   const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
   const [paymentType, setPaymentType] = useState(() => initialRecord?.paymentType ?? "cash");
   const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
-  const [recordDate, setRecordDate] = useState(() => toDatetimeLocal(new Date()));
+  const [recordDate, setRecordDate] = useState<Date>(() => new Date());
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -415,16 +416,16 @@ function RecordForm({
   }
 
   function setDateToday() {
-    setRecordDate(toDatetimeLocal(new Date()));
+    const d = new Date();
+    d.setHours(recordDate.getHours(), recordDate.getMinutes());
+    setRecordDate(d);
   }
 
   function setDateYesterday() {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    // preserve current time
-    const current = new Date(recordDate);
-    d.setHours(current.getHours(), current.getMinutes());
-    setRecordDate(toDatetimeLocal(d));
+    d.setHours(recordDate.getHours(), recordDate.getMinutes());
+    setRecordDate(d);
   }
 
   async function submit(addAnother: boolean) {
@@ -439,7 +440,7 @@ function RecordForm({
       note: note || undefined,
       counterParty: payer || undefined,
       amount: { value: signedAmount, currencyCode },
-      recordDate: new Date(recordDate).toISOString(),
+      recordDate: recordDate.toISOString(),
       paymentType,
       recordState,
     };
@@ -495,7 +496,7 @@ function RecordForm({
           {/* Left column */}
           <div className="flex-1 space-y-4">
             <Tabs value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
-              <TabsList className="bg-default w-full">
+              <TabsList className="bg-[#1F1F1E] w-full">
                 <TabsTrigger
                   value="expense"
                   className="flex-1 data-[state=active]:bg-danger data-[state=active]:text-white"
@@ -519,7 +520,7 @@ function RecordForm({
                 Amount <span className="text-danger">*</span>
               </label>
               <div className="flex gap-2">
-                <div className="flex flex-1 rounded-xl border border-border bg-background overflow-hidden">
+                <div className="flex flex-1 rounded-xl border-0 bg-[#1F1F1E] overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setAmount((v) => Math.max(0, (v ?? 0) - 1))}
@@ -545,7 +546,7 @@ function RecordForm({
                     +
                   </button>
                 </div>
-                <div className="w-20 flex items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-mono text-muted">
+                <div className="w-20 flex items-center justify-center rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm font-mono text-muted">
                   {currencyCode}
                 </div>
               </div>
@@ -554,10 +555,10 @@ function RecordForm({
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Account</label>
               <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger className="w-full bg-background border-border text-foreground rounded-xl">
+                <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-background border-border">
+                <SelectContent>
                   {accounts.map((a) => (
                     <SelectItem key={a.id} value={a.id} className="text-foreground focus:bg-default focus:text-foreground">
                       {a.name}
@@ -571,10 +572,10 @@ function RecordForm({
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1.5">To Account</label>
                 <Select value={toAccountId} onValueChange={setToAccountId}>
-                  <SelectTrigger className="w-full bg-background border-border text-foreground rounded-xl">
+                  <SelectTrigger className="w-full rounded-xl">
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
-                  <SelectContent className="bg-background border-border">
+                  <SelectContent>
                     {accounts.filter((a) => a.id !== accountId).map((a) => (
                       <SelectItem key={a.id} value={a.id} className="text-foreground focus:bg-default focus:text-foreground">
                         {a.name}
@@ -592,25 +593,19 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Date &amp; Time</label>
-              <input
-                type="datetime-local"
-                value={recordDate}
-                onChange={(e) => setRecordDate(e.target.value)}
-                aria-label="Date & Time"
-                className="w-full rounded-xl border border-border bg-background text-foreground text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent [color-scheme:dark]"
-              />
+              <DateTimePicker value={recordDate} onChange={setRecordDate} />
               <div className="flex gap-2 mt-2">
                 <button
                   type="button"
                   onClick={setDateToday}
-                  className="text-xs px-2.5 py-1 rounded-full border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-[#1F1F1E] text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={setDateYesterday}
-                  className="text-xs px-2.5 py-1 rounded-full border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-[#1F1F1E] text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Yesterday
                 </button>
@@ -632,10 +627,10 @@ function RecordForm({
                 aria-autocomplete="list"
                 aria-expanded={showSuggestions && suggestions.length > 0}
                 rows={3}
-                className="bg-background border-border text-foreground placeholder:text-muted rounded-xl resize-none"
+                className="text-foreground placeholder:text-muted rounded-xl resize-none"
               />
               {showSuggestions && suggestions.length > 0 && (
-                <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
+                <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border-0 bg-[#1F1F1E] shadow-lg overflow-hidden">
                   {suggestions.map((r) => {
                     const positive = r.amount.value > 0;
                     return (
@@ -672,17 +667,17 @@ function RecordForm({
                 value={payer}
                 onChange={(e) => setPayer(e.target.value)}
                 aria-label="Payer"
-                className="bg-background border-border text-foreground placeholder:text-muted rounded-xl"
+                className="text-foreground placeholder:text-muted rounded-xl"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Payment type</label>
               <Select value={paymentType} onValueChange={setPaymentType}>
-                <SelectTrigger className="w-full bg-background border-border text-foreground rounded-xl">
+                <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-background border-border">
+                <SelectContent>
                   {PAYMENT_TYPES.map((t) => (
                     <SelectItem key={t.id} value={t.id} className="text-foreground focus:bg-default focus:text-foreground">
                       {t.label}
@@ -695,10 +690,10 @@ function RecordForm({
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Payment status</label>
               <Select value={recordState} onValueChange={setRecordState}>
-                <SelectTrigger className="w-full bg-background border-border text-foreground rounded-xl">
+                <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-background border-border">
+                <SelectContent>
                   {RECORD_STATES.map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-foreground focus:bg-default focus:text-foreground">
                       {s.label}

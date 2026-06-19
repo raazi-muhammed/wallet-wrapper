@@ -504,7 +504,7 @@ function RecordForm({
     setRecordDate(d);
   }
 
-  async function submit(addAnother: boolean) {
+  async function submit(addAnother: boolean | "sameDate") {
     if (amount === undefined || !accountId) return;
     setSubmitting(true);
     setError("");
@@ -545,8 +545,12 @@ function RecordForm({
         throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
-      if (addAnother) {
+      if (addAnother === "sameDate") {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        // recordDate is intentionally preserved
+      } else if (addAnother) {
+        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        setRecordDate(new Date());
       } else {
         onSuccess();
       }
@@ -592,7 +596,7 @@ function RecordForm({
             </Tabs>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">
                 Amount <span className="text-danger">*</span>
               </label>
               <div className="flex gap-2">
@@ -629,13 +633,13 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Account</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Account</label>
               <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
             </div>
 
             {recordType === "transfer" && (
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">To Account</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">To Account</label>
                 <AccountSelect
                   accounts={accounts.filter((a) => a.id !== accountId)}
                   value={toAccountId}
@@ -646,12 +650,12 @@ function RecordForm({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Category</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
               <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Date &amp; Time</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>
               <DateTimePicker value={recordDate} onChange={setRecordDate} />
               <div className="flex gap-2 mt-2">
                 <button
@@ -675,7 +679,7 @@ function RecordForm({
           {/* Right column */}
           <div className="lg:w-72 space-y-4">
             <div className="relative">
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Note</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Note</label>
               <Textarea
                 placeholder="Describe your record"
                 value={note}
@@ -721,7 +725,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payer</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
               <Input
                 value={payer}
                 onChange={(e) => setPayer(e.target.value)}
@@ -731,7 +735,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payment type</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
               <Select value={paymentType} onValueChange={setPaymentType}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
@@ -747,7 +751,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payment status</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
               <Select value={recordState} onValueChange={setRecordState}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
@@ -774,14 +778,24 @@ function RecordForm({
       {/* Footer */}
       <div className="px-6 pb-6 pt-2 flex gap-2">
         {mode === "add" && (
-          <Button
-            variant="outline"
-            className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
-            onClick={() => submit(true)}
-            disabled={amount === undefined || !accountId || submitting}
-          >
-            Add and create another
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              onClick={() => submit(true)}
+              disabled={amount === undefined || !accountId || submitting}
+            >
+              Add another
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              onClick={() => submit("sameDate")}
+              disabled={amount === undefined || !accountId || submitting}
+            >
+              Add, keep date
+            </Button>
+          </>
         )}
         <Button
           className={mode === "add" ? "flex-1" : "w-full"}

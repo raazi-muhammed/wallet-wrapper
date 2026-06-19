@@ -190,6 +190,82 @@ export function EditRecordModal({ token, accounts, records, record, isOpen, onCl
   );
 }
 
+// ── Account Select ────────────────────────────────────────────────────────────
+
+function AccountSelect({
+  accounts,
+  value,
+  onChange,
+  placeholder = "Select account",
+}: {
+  accounts: Account[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = accounts.find((a) => a.id === value);
+  const filtered = search.trim()
+    ? accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
+    : accounts;
+
+  function select(id: string) {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setTimeout(() => inputRef.current?.focus(), 50); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+        >
+          <span className={selected ? "text-foreground" : "text-muted"}>{selected ? selected.name : placeholder}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto"
+        style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
+        align="start"
+        sideOffset={4}
+      >
+        <div className="p-2 shrink-0">
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search accounts…"
+            className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+          />
+        </div>
+        <div className="overflow-y-auto flex-1 min-h-0">
+          {filtered.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => select(a.id)}
+              className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-default transition-colors ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+            >
+              <span className="truncate">{a.name}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-3 py-4 text-sm text-muted text-center">No accounts found</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ── Category Select ───────────────────────────────────────────────────────────
 
 function CategorySelect({
@@ -237,7 +313,7 @@ function CategorySelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="w-full flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
@@ -554,35 +630,18 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5">Account</label>
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger className="w-full rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id} className="text-foreground focus:bg-default focus:text-foreground">
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
             </div>
 
             {recordType === "transfer" && (
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1.5">To Account</label>
-                <Select value={toAccountId} onValueChange={setToAccountId}>
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.filter((a) => a.id !== accountId).map((a) => (
-                      <SelectItem key={a.id} value={a.id} className="text-foreground focus:bg-default focus:text-foreground">
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountSelect
+                  accounts={accounts.filter((a) => a.id !== accountId)}
+                  value={toAccountId}
+                  onChange={setToAccountId}
+                  placeholder="Select account"
+                />
               </div>
             )}
 

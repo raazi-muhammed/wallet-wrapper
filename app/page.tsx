@@ -1,11 +1,41 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Card, Table, CircleDashedIcon, InfoIcon, SuccessIcon, DangerIcon, WarningIcon, ExternalLinkIcon } from "@heroui/react";
+import {
+  Wallet,
+  Banknote,
+  Landmark,
+  PiggyBank,
+  CreditCard,
+  TrendingUp,
+  Shield,
+  CircleDashed,
+} from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,13 +66,13 @@ function fmtRelative(iso: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TYPE_ICONS: Record<string, ComponentType<any>> = {
-  General: CircleDashedIcon,
-  Cash: SuccessIcon,
-  CurrentAccount: InfoIcon,
-  SavingAccount: InfoIcon,
-  CreditCard: DangerIcon,
-  Investment: ExternalLinkIcon,
-  Insurance: WarningIcon,
+  General: Wallet,
+  Cash: Banknote,
+  CurrentAccount: Landmark,
+  SavingAccount: PiggyBank,
+  CreditCard: CreditCard,
+  Investment: TrendingUp,
+  Insurance: Shield,
 };
 
 // ── Settings Popover ──────────────────────────────────────────────────────────
@@ -81,7 +111,7 @@ function SettingsPopover({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="API settings"
-        className="flex items-center justify-center size-8 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
+        className="flex items-center justify-center size-10 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4">
           <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4Z"/>
@@ -91,7 +121,7 @@ function SettingsPopover({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed top-14 right-4 z-50 w-80 rounded-xl border border-border bg-background shadow-lg space-y-4 p-4">
+          <div className="fixed top-4 right-4 z-50 w-80 rounded-xl shadow-lg space-y-4 p-4" style={{ background: "#0F0F0F" }}>
             <p className="text-sm font-semibold text-foreground">API Connection</p>
 
             <div className="space-y-1.5">
@@ -178,7 +208,7 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <CircleDashedIcon className="size-10 text-muted" />
+        <CircleDashed className="size-10 text-muted" />
         <p className="text-foreground font-medium">Connect your Wallet</p>
         <p className="text-muted text-sm">Paste your Bearer token below to get started.</p>
       </div>
@@ -206,50 +236,6 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
 
 // ── Sidebar Account Item ──────────────────────────────────────────────────────
 
-function SidebarAccountItem({
-  account,
-  recordCount,
-  selected,
-  onClick,
-}: {
-  account: Account;
-  recordCount: number;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const { currentBalance, currencyCode } = account.balance;
-  const Icon = TYPE_ICONS[account.accountType] ?? CircleDashedIcon;
-  const positive = currentBalance >= 0;
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
-        selected
-          ? "bg-accent/15 text-foreground"
-          : "text-muted hover:bg-default hover:text-foreground"
-      }`}
-    >
-      <div className="flex items-center gap-2.5">
-        <Icon className={`size-3.5 shrink-0 ${selected ? "text-accent" : "text-muted group-hover:text-foreground"}`} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-sm font-medium truncate">{account.name}</span>
-            <span className="text-xs font-mono text-muted shrink-0">{currencyCode}</span>
-          </div>
-          <div className="flex items-center justify-between gap-1 mt-0.5">
-            <span className={`text-xs font-mono tabular-nums ${positive ? "text-success" : "text-danger"}`}>
-              {fmt(currentBalance, currencyCode)}
-            </span>
-            {recordCount > 0 && (
-              <span className="text-xs text-muted shrink-0">{recordCount}</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
@@ -258,71 +244,58 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
   return (
-    <Table>
-      <Table.ScrollContainer>
-        <Table.Content aria-label="Wallet records" selectionMode="none">
-          <Table.Header>
-            <Table.Column isRowHeader>Date</Table.Column>
-            <Table.Column>Account</Table.Column>
-            <Table.Column>Category</Table.Column>
-            <Table.Column>Note</Table.Column>
-            <Table.Column>Payee</Table.Column>
-            <Table.Column>Payment</Table.Column>
-            <Table.Column>Amount</Table.Column>
-            <Table.Column>{""}</Table.Column>
-          </Table.Header>
-          <Table.Body items={records}>
-            {(r) => {
-              const { value, currencyCode } = r.amount;
-              const positive = value > 0;
-              const highlighted = r.id === highlightedId;
-              return (
-                <Table.Row key={r.id} id={r.id} data-record-id={r.id} className={highlighted ? "outline outline-2 outline-accent" : ""}>
-                  <Table.Cell>{fmtDate(r.recordDate)}</Table.Cell>
-                  <Table.Cell>{r.accountName}</Table.Cell>
-                  <Table.Cell>
-                    {r.category
-                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
-                      : <span className="text-muted">—</span>}
-                  </Table.Cell>
-                  <Table.Cell>
-                    {r.note
-                      ? <span className="block max-w-[160px] truncate">{r.note}</span>
-                      : <span className="text-muted">—</span>}
-                  </Table.Cell>
-                  <Table.Cell>
-                    {r.counterParty
-                      ? <span className="block max-w-[120px] truncate">{r.counterParty}</span>
-                      : <span className="text-muted">—</span>}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted capitalize whitespace-nowrap">
-                      {r.paymentType.replace(/_/g, " ")}
-                    </span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
-                      {positive ? "+" : ""}{fmt(value, currencyCode)}
-                    </span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <button
-                      onClick={() => onEdit?.(r)}
-                      className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-default transition-colors"
-                      aria-label="Edit record"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </button>
-                  </Table.Cell>
-                </Table.Row>
-              );
-            }}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
-    </Table>
+    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+      <Table>
+        <TableHeader className="[&_tr]:border-0">
+          <TableRow className="border-0 hover:bg-transparent">
+            <TableHead className="text-muted font-medium">Date</TableHead>
+            <TableHead className="text-muted font-medium">Account</TableHead>
+            <TableHead className="text-muted font-medium">Category</TableHead>
+            <TableHead className="text-muted font-medium">Note</TableHead>
+            <TableHead className="text-muted font-medium">Payee</TableHead>
+            <TableHead className="text-muted font-medium">Amount</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {records.map((r) => {
+            const { value, currencyCode } = r.amount;
+            const positive = value > 0;
+            const highlighted = r.id === highlightedId;
+            return (
+              <TableRow
+                key={r.id}
+                data-record-id={r.id}
+                onClick={() => onEdit?.(r)}
+                className={`border-0 cursor-pointer odd:bg-white/[0.03] even:bg-transparent hover:bg-white/[0.07] ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+              >
+                <TableCell className="text-foreground">{fmtDate(r.recordDate)}</TableCell>
+                <TableCell className="text-foreground">{r.accountName}</TableCell>
+                <TableCell>
+                  {r.category
+                    ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
+                    : <span className="text-muted">—</span>}
+                </TableCell>
+                <TableCell>
+                  {r.note
+                    ? <span className="block max-w-[160px] truncate text-foreground">{r.note}</span>
+                    : <span className="text-muted">—</span>}
+                </TableCell>
+                <TableCell>
+                  {r.counterParty
+                    ? <span className="block max-w-[120px] truncate text-foreground">{r.counterParty}</span>
+                    : <span className="text-muted">—</span>}
+                </TableCell>
+                <TableCell>
+                  <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
+                    {positive ? "+" : ""}{fmt(value, currencyCode)}
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -427,89 +400,84 @@ export default function Home() {
       : activeAccounts.find((a) => a.id === selectedAccount)?.name ?? "Records";
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Navbar */}
-      <header className="shrink-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-        <div className="relative w-full px-4 h-14 flex items-center">
-          <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
-            {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
-            {token && (
-              <AddRecordButton
-                token={token}
-                accounts={activeAccounts}
-                records={records}
-                onSuccess={() => loadData(token)}
-                onGoToRecord={handleGoToRecord}
-              />
-            )}
-            <SettingsPopover
-              token={token}
-              stats={stats}
-              onSave={handleSave}
-              onDisconnect={handleDisconnect}
-            />
-          </div>
-        </div>
-      </header>
+    <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
+      {/* Sidebar */}
+      {activeAccounts.length > 0 && (
+        <Sidebar variant="floating">
+          <SidebarHeader className="px-4 pt-4 pb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup className="pt-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={selectedAccount === "all"}
+                      onClick={() => handleAccountSelect("all")}
+                      size="lg"
+                      className="justify-between"
+                    >
+                      <span className="font-medium">All Accounts</span>
+                      <span className="text-xs text-sidebar-foreground/50">{allRecords.length}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {activeAccounts.length > 0 && (
-          <aside className="w-64 shrink-0 border-r border-border flex flex-col overflow-hidden">
-            <div className="px-4 py-4 shrink-0">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted">Accounts</p>
-            </div>
-            <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-              {/* All accounts */}
-              <button
-                onClick={() => handleAccountSelect("all")}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                  selectedAccount === "all"
-                    ? "bg-accent/15 text-foreground"
-                    : "text-muted hover:bg-default hover:text-foreground"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">All Accounts</span>
-                  <span className="text-xs text-muted">{allRecords.length}</span>
-                </div>
-              </button>
+            <SidebarSeparator />
 
-              <div className="my-2 border-t border-border" />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {activeAccounts.map((a) => {
+                    const count = allRecords.filter((r) => r.accountId === a.id).length;
+                    const Icon = TYPE_ICONS[a.accountType] ?? CircleDashed;
+                    const bal = a.balance.currentBalance;
+                    return (
+                      <SidebarMenuItem key={a.id}>
+                        <SidebarMenuButton
+                          isActive={selectedAccount === a.id}
+                          onClick={() => handleAccountSelect(a.id)}
+                          size="lg"
+                          className="justify-between h-auto py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon className="size-4 shrink-0 text-sidebar-foreground/60" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{a.name}</p>
+                              <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
+                                {fmt(bal, a.balance.currencyCode)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
+      )}
 
-              {activeAccounts.map((a) => {
-                const count = allRecords.filter((r) => r.accountId === a.id).length;
-                return (
-                  <SidebarAccountItem
-                    key={a.id}
-                    account={a}
-                    recordCount={count}
-                    selected={selectedAccount === a.id}
-                    onClick={() => handleAccountSelect(a.id)}
-                  />
-                );
-              })}
-            </nav>
-          </aside>
-        )}
-
-        {/* Main content */}
+      {/* Main area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
-          {/* Error */}
           {error && (
             <div className="mx-6 mt-6 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
               {error}
             </div>
           )}
 
-          {/* Empty state */}
           {!token && <TokenConnectForm onSave={handleSave} />}
 
-          {/* Records */}
           {(activeAccounts.length > 0 || records.length > 0) && (
             <div className="px-6 py-6 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
                   <p className="text-xs text-muted mt-0.5">
@@ -517,6 +485,24 @@ export default function Home() {
                       ? "Loading…"
                       : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · last 3 months`}
                   </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
+                  {token && (
+                    <AddRecordButton
+                      token={token}
+                      accounts={activeAccounts}
+                      records={records}
+                      onSuccess={() => loadData(token)}
+                      onGoToRecord={handleGoToRecord}
+                    />
+                  )}
+                  <SettingsPopover
+                    token={token}
+                    stats={stats}
+                    onSave={handleSave}
+                    onDisconnect={handleDisconnect}
+                  />
                 </div>
               </div>
               <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
@@ -537,6 +523,6 @@ export default function Home() {
           onGoToRecord={handleGoToRecord}
         />
       )}
-    </div>
+    </SidebarProvider>
   );
 }

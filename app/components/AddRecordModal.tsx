@@ -1,35 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Loader2,
-  Utensils,
-  Car,
-  ShoppingBag,
-  Heart,
-  Plane,
-  BookOpen,
-  Briefcase,
-  ArrowLeftRight,
-  Shield,
-  Landmark,
-  Zap,
-  Home,
-  RefreshCw,
-  Gift,
-  Sparkles,
-  TrendingUp,
-  PawPrint,
-  Users,
-  Banknote,
-  Coffee,
-  Dumbbell,
-  Music,
-  Pill,
-  Wrench,
-  Tag,
-  type LucideIcon,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,8 +27,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
+import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
 type RecordType = "expense" | "income" | "transfer";
+
 
 const PAYMENT_TYPES: { id: string; label: string }[] = [
   { id: "cash", label: "Cash" },
@@ -72,42 +46,6 @@ const RECORD_STATES: { id: string; label: string }[] = [
   { id: "uncleared", label: "Uncleared" },
   { id: "reconciled", label: "Reconciled" },
 ];
-
-const CATEGORY_ICON_MAP: Array<[RegExp, LucideIcon]> = [
-  [/food|meal|dining|restaurant|snack|fast.?food|lunch|dinner|breakfast|cafe|coffee|tea|drink|beverage|pizza|burger/i, Utensils],
-  [/coffee|cafe/i, Coffee],
-  [/groceri|supermarket|vegetable|fruit|market/i, ShoppingBag],
-  [/transport|vehicle|car|taxi|uber|bus|train|fuel|petrol|parking|auto|bike|metro|commute/i, Car],
-  [/shopping|cloth|fashion|apparel|accessory|mall|store/i, ShoppingBag],
-  [/health|medical|doctor|hospital|pharmacy|medicine|clinic|dental|vision/i, Heart],
-  [/pill|drug|supplement|vitamin/i, Pill],
-  [/gym|fitness|sport|exercise|workout/i, Dumbbell],
-  [/entertainment|movie|cinema|game|fun|leisure|netflix|streaming|music/i, Music],
-  [/travel|flight|hotel|vacation|holiday|trip|tourism|airbnb/i, Plane],
-  [/education|school|book|course|tuition|learning|college|university/i, BookOpen],
-  [/salary|income|wage|earning|paycheck|bonus/i, Briefcase],
-  [/transfer|sent|received/i, ArrowLeftRight],
-  [/insurance/i, Shield],
-  [/financial|bank|fee|charge|fine|tax|advisory|penalty/i, Landmark],
-  [/utility|electric|water|gas|internet|wifi|phone|bill/i, Zap],
-  [/rent|housing|home|mortgage|maintenance|repair/i, Home],
-  [/maintenance|repair|fix|service/i, Wrench],
-  [/subscription|membership/i, RefreshCw],
-  [/gift|donation|charity|contribution/i, Gift],
-  [/personal|beauty|care|hair|spa|salon/i, Sparkles],
-  [/invest|stock|mutual|fund|crypto|trading/i, TrendingUp],
-  [/pet|animal|vet/i, PawPrint],
-  [/family|kids|child|baby|parent/i, Users],
-  [/salary|income|earning/i, Banknote],
-];
-
-function getCategoryIcon(name: string, groupName?: string): LucideIcon {
-  const text = `${name} ${groupName ?? ""}`;
-  for (const [pattern, icon] of CATEGORY_ICON_MAP) {
-    if (pattern.test(text)) return icon;
-  }
-  return Tag;
-}
 
 function fmt(value: number, currency: string) {
   try {
@@ -225,7 +163,14 @@ function AccountSelect({
           type="button"
           className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
-          <span className={selected ? "text-foreground" : "text-muted"}>{selected ? selected.name : placeholder}</span>
+          {selected ? (
+            <span className="flex items-center gap-2 min-w-0">
+              {(() => { const Icon = getAccountIcon(selected.accountType, selected.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: selected.color ?? "var(--muted-foreground)" }} />; })()}
+              <span className="truncate text-foreground">{selected.name}</span>
+            </span>
+          ) : (
+            <span className="text-muted">{placeholder}</span>
+          )}
           <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
@@ -252,8 +197,9 @@ function AccountSelect({
               key={a.id}
               type="button"
               onClick={() => select(a.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
             >
+              {(() => { const Icon = getAccountIcon(a.accountType, a.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />; })()}
               <span className="truncate">{a.name}</span>
             </button>
           ))}
@@ -317,7 +263,15 @@ function CategorySelect({
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
-              {(() => { const Icon = getCategoryIcon(selected.name, selected.group?.name); return <Icon className="size-3.5 shrink-0 text-muted" />; })()}
+              {(() => {
+                const Icon = getCategoryIcon(selected.name, selected.group?.name);
+                const color = selected.color ?? "#888";
+                return (
+                  <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                    <Icon className="size-3" />
+                  </span>
+                );
+              })()}
               <span className="truncate">{selected.name}</span>
             </span>
           ) : (
@@ -352,14 +306,17 @@ function CategorySelect({
               </div>
               {items.map((c) => {
                 const Icon = getCategoryIcon(c.name, groupName);
+                const color = c.color ?? "#888";
                 return (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => select(c.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
                   >
-                    <Icon className="size-3.5 shrink-0 text-muted" />
+                    <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                      <Icon className="size-3" />
+                    </span>
                     <span className="truncate">{c.name}</span>
                   </button>
                 );
@@ -368,14 +325,17 @@ function CategorySelect({
           ))}
           {ungrouped.map((c) => {
             const Icon = getCategoryIcon(c.name);
+            const color = c.color ?? "#888";
             return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => select(c.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
               >
-                <Icon className="size-3.5 shrink-0 text-muted" />
+                <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                  <Icon className="size-3" />
+                </span>
                 <span className="truncate">{c.name}</span>
               </button>
             );
@@ -504,7 +464,7 @@ function RecordForm({
     setRecordDate(d);
   }
 
-  async function submit(addAnother: boolean) {
+  async function submit(addAnother: boolean | "sameDate") {
     if (amount === undefined || !accountId) return;
     setSubmitting(true);
     setError("");
@@ -545,8 +505,12 @@ function RecordForm({
         throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
-      if (addAnother) {
+      if (addAnother === "sameDate") {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        // recordDate is intentionally preserved
+      } else if (addAnother) {
+        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        setRecordDate(new Date());
       } else {
         onSuccess();
       }
@@ -592,7 +556,7 @@ function RecordForm({
             </Tabs>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">
                 Amount <span className="text-danger">*</span>
               </label>
               <div className="flex gap-2">
@@ -629,13 +593,13 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Account</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Account</label>
               <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
             </div>
 
             {recordType === "transfer" && (
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">To Account</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">To Account</label>
                 <AccountSelect
                   accounts={accounts.filter((a) => a.id !== accountId)}
                   value={toAccountId}
@@ -646,12 +610,12 @@ function RecordForm({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Category</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
               <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Date &amp; Time</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>
               <DateTimePicker value={recordDate} onChange={setRecordDate} />
               <div className="flex gap-2 mt-2">
                 <button
@@ -675,7 +639,7 @@ function RecordForm({
           {/* Right column */}
           <div className="lg:w-72 space-y-4">
             <div className="relative">
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Note</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Note</label>
               <Textarea
                 placeholder="Describe your record"
                 value={note}
@@ -721,7 +685,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payer</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
               <Input
                 value={payer}
                 onChange={(e) => setPayer(e.target.value)}
@@ -731,7 +695,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payment type</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
               <Select value={paymentType} onValueChange={setPaymentType}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
@@ -747,7 +711,7 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">Payment status</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
               <Select value={recordState} onValueChange={setRecordState}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
@@ -774,14 +738,24 @@ function RecordForm({
       {/* Footer */}
       <div className="px-6 pb-6 pt-2 flex gap-2">
         {mode === "add" && (
-          <Button
-            variant="outline"
-            className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
-            onClick={() => submit(true)}
-            disabled={amount === undefined || !accountId || submitting}
-          >
-            Add and create another
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              onClick={() => submit(true)}
+              disabled={amount === undefined || !accountId || submitting}
+            >
+              Add another
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              onClick={() => submit("sameDate")}
+              disabled={amount === undefined || !accountId || submitting}
+            >
+              Add, keep date
+            </Button>
+          </>
         )}
         <Button
           className={mode === "add" ? "flex-1" : "w-full"}

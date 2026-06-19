@@ -10,6 +10,10 @@ import {
   TrendingUp,
   Shield,
   CircleDashed,
+  Globe,
+  Gem,
+  Building2,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Table,
@@ -21,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
+import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 import {
@@ -62,18 +67,6 @@ function fmtRelative(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Account type icons ────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TYPE_ICONS: Record<string, ComponentType<any>> = {
-  General: Wallet,
-  Cash: Banknote,
-  CurrentAccount: Landmark,
-  SavingAccount: PiggyBank,
-  CreditCard: CreditCard,
-  Investment: TrendingUp,
-  Insurance: Shield,
-};
 
 // ── Settings Popover ──────────────────────────────────────────────────────────
 
@@ -239,62 +232,126 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
+const ICON_BG_COLORS = [
+  "bg-pink-500/20 text-pink-400",
+  "bg-violet-500/20 text-violet-400",
+  "bg-emerald-500/20 text-emerald-400",
+  "bg-sky-500/20 text-sky-400",
+  "bg-amber-500/20 text-amber-400",
+  "bg-rose-500/20 text-rose-400",
+  "bg-teal-500/20 text-teal-400",
+  "bg-indigo-500/20 text-indigo-400",
+];
+
+
+function hashStr(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function fmtDateLong(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function groupByDate(records: WalletRecord[]) {
+  const map = new Map<string, WalletRecord[]>();
+  for (const r of records) {
+    const key = r.recordDate.slice(0, 10);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
+}
+
+function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: WalletRecord[]; accounts: Account[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
+
+  const groups = groupByDate(records);
+
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
-      <Table>
-        <TableHeader className="[&_tr]:border-0">
-          <TableRow className="border-0 hover:bg-transparent">
-            <TableHead className="text-muted font-medium">Date</TableHead>
-            <TableHead className="text-muted font-medium">Account</TableHead>
-            <TableHead className="text-muted font-medium">Category</TableHead>
-            <TableHead className="text-muted font-medium">Note</TableHead>
-            <TableHead className="text-muted font-medium">Payee</TableHead>
-            <TableHead className="text-muted font-medium">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {records.map((r) => {
-            const { value, currencyCode } = r.amount;
-            const positive = value > 0;
-            const highlighted = r.id === highlightedId;
-            return (
-              <TableRow
-                key={r.id}
-                data-record-id={r.id}
-                onClick={() => onEdit?.(r)}
-                className={`border-0 cursor-pointer odd:bg-white/[0.03] even:bg-transparent hover:bg-white/[0.07] ${highlighted ? "outline outline-2 outline-accent" : ""}`}
-              >
-                <TableCell className="text-foreground">{fmtDate(r.recordDate)}</TableCell>
-                <TableCell className="text-foreground">{r.accountName}</TableCell>
-                <TableCell>
-                  {r.category
-                    ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  {r.note
-                    ? <span className="block max-w-[160px] truncate text-foreground">{r.note}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  {r.counterParty
-                    ? <span className="block max-w-[120px] truncate text-foreground">{r.counterParty}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
-                    {positive ? "+" : ""}{fmt(value, currencyCode)}
-                  </span>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <div className="space-y-0 rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+      {groups.map(({ date, records: dayRecords }) => {
+        const currency = dayRecords[0]?.amount.currencyCode;
+        const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
+        return (
+          <div key={date}>
+            {/* Date header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+              <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
+              <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
+                {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
+              </span>
+            </div>
+            {/* Records */}
+            {dayRecords.map((r) => {
+              const { value, currencyCode } = r.amount;
+              const positive = value > 0;
+              const highlighted = r.id === highlightedId;
+              const Icon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
+              const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
+              const account = accounts.find((a) => a.id === r.accountId);
+              const AccountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
+              const accountColor = account?.color ?? "var(--muted-foreground)";
+              const cleared = r.recordState === "cleared" || r.recordState === "reconciled";
+
+              return (
+                <div
+                  key={r.id}
+                  data-record-id={r.id}
+                  onClick={() => onEdit?.(r)}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                >
+                  {/* Category icon */}
+                  <div className="relative shrink-0">
+                    <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
+                      <Icon className="size-4" />
+                    </div>
+                    {cleared && (
+                      <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-success flex items-center justify-center">
+                        <svg viewBox="0 0 10 10" className="size-2 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category + payee */}
+                  <div className="min-w-0 w-40 shrink-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
+                    {r.counterParty && <p className="text-xs text-muted truncate">{r.counterParty}</p>}
+                  </div>
+
+                  {/* Account */}
+                  <div className="flex items-center gap-1.5 min-w-0 w-36 shrink-0">
+                    <AccountIcon weight="fill" className="size-3.5 shrink-0" style={{ color: accountColor }} />
+                    <span className="text-sm text-muted truncate">{r.accountName}</span>
+                  </div>
+
+                  {/* Note */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-muted truncate block">{r.note ?? ""}</span>
+                  </div>
+
+                  {/* Amount + time */}
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm font-semibold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
+                      {positive ? "+" : ""}{fmt(value, currencyCode)}
+                    </p>
+                    <p className="text-xs text-muted">{fmtTime(r.recordDate)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -433,7 +490,7 @@ export default function Home() {
                 <SidebarMenu>
                   {activeAccounts.map((a) => {
                     const count = allRecords.filter((r) => r.accountId === a.id).length;
-                    const Icon = TYPE_ICONS[a.accountType] ?? CircleDashed;
+                    const Icon = getAccountIcon(a.accountType, a.name);
                     const bal = a.balance.currentBalance;
                     return (
                       <SidebarMenuItem key={a.id}>
@@ -444,7 +501,7 @@ export default function Home() {
                           className="justify-between h-auto py-2"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <Icon className="size-4 shrink-0 text-sidebar-foreground/60" />
+                            <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{a.name}</p>
                               <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
@@ -505,7 +562,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
+              <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
             </div>
           )}
         </main>

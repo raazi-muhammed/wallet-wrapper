@@ -6,6 +6,20 @@ import {
   Sparkles, TrendingUp, PawPrint, Users, Banknote, Coffee, Dumbbell,
   Music, Pill, Wrench, Tag, type LucideIcon,
 } from "lucide-react"
+import {
+  Wallet as PhWallet,
+  Bank as PhBank,
+  CreditCard as PhCreditCard,
+  PiggyBank as PhPiggyBank,
+  TrendUp as PhTrendUp,
+  ShieldCheck as PhShieldCheck,
+  Globe as PhGlobe,
+  Coins as PhCoins,
+  Buildings as PhBuildings,
+  Vault as PhVault,
+  HandCoins as PhHandCoins,
+} from "@phosphor-icons/react"
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -38,6 +52,39 @@ const CATEGORY_ICON_MAP: Array<[RegExp, LucideIcon]> = [
   [/family|kids|child|baby|parent/i, Users],
   [/salary|income|earning/i, Banknote],
 ]
+
+const ACCOUNT_TYPE_ICONS: Record<string, PhosphorIcon> = {
+  General: PhWallet,
+  Cash: PhHandCoins,
+  CurrentAccount: PhBank,
+  SavingAccount: PhVault,
+  CreditCard: PhCreditCard,
+  Investment: PhTrendUp,
+  Insurance: PhShieldCheck,
+  EWallet: PhWallet,
+  Loan: PhBuildings,
+  Asset: PhCoins,
+  Commodity: PhCoins,
+  Debt: PhBuildings,
+  MutualFund: PhTrendUp,
+  Checking: PhBank,
+  Online: PhGlobe,
+}
+
+const ACCOUNT_NAME_ICONS: Array<[RegExp, PhosphorIcon]> = [
+  [/paypal|stripe|razorpay|paytm|gpay|google.?pay|apple.?pay|amazon.?pay|upi/i, PhGlobe],
+  [/gold|silver|crypto|bitcoin|eth/i, PhCoins],
+  [/fd|fixed.?deposit|bond/i, PhVault],
+  [/loan|debt|mortgage/i, PhBuildings],
+]
+
+export function getAccountIcon(accountType: string, accountName: string): PhosphorIcon {
+  if (ACCOUNT_TYPE_ICONS[accountType]) return ACCOUNT_TYPE_ICONS[accountType]
+  for (const [pattern, icon] of ACCOUNT_NAME_ICONS) {
+    if (pattern.test(accountName)) return icon
+  }
+  return PhWallet
+}
 
 export function getCategoryIcon(name: string, groupName?: string): LucideIcon {
   const text = `${name} ${groupName ?? ""}`

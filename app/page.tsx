@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
-import { getCategoryIcon } from "@/lib/utils";
+import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 import {
@@ -67,55 +67,6 @@ function fmtRelative(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Account type icons (Phosphor, weight="fill") ──────────────────────────────
-
-import {
-  Wallet as PhWallet,
-  Bank as PhBank,
-  CreditCard as PhCreditCard,
-  PiggyBank as PhPiggyBank,
-  TrendUp as PhTrendUp,
-  ShieldCheck as PhShieldCheck,
-  Globe as PhGlobe,
-  Coins as PhCoins,
-  Buildings as PhBuildings,
-  Vault as PhVault,
-  HandCoins as PhHandCoins,
-} from "@phosphor-icons/react";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
-
-const TYPE_ICONS: Record<string, PhosphorIcon> = {
-  General: PhWallet,
-  Cash: PhHandCoins,
-  CurrentAccount: PhBank,
-  SavingAccount: PhVault,
-  CreditCard: PhCreditCard,
-  Investment: PhTrendUp,
-  Insurance: PhShieldCheck,
-  EWallet: PhWallet,
-  Loan: PhBuildings,
-  Asset: PhCoins,
-  Commodity: PhCoins,
-  Debt: PhBuildings,
-  MutualFund: PhTrendUp,
-  Checking: PhBank,
-  Online: PhGlobe,
-};
-
-const NAME_ICONS: Array<[RegExp, PhosphorIcon]> = [
-  [/paypal|stripe|razorpay|paytm|gpay|google.?pay|apple.?pay|amazon.?pay|upi/i, PhGlobe],
-  [/gold|silver|crypto|bitcoin|eth/i, PhCoins],
-  [/fd|fixed.?deposit|bond/i, PhVault],
-  [/loan|debt|mortgage/i, PhBuildings],
-];
-
-function getAccountIcon(accountType: string, accountName: string): PhosphorIcon {
-  if (TYPE_ICONS[accountType]) return TYPE_ICONS[accountType];
-  for (const [pattern, icon] of NAME_ICONS) {
-    if (pattern.test(accountName)) return icon;
-  }
-  return PhWallet;
-}
 
 // ── Settings Popover ──────────────────────────────────────────────────────────
 
@@ -292,10 +243,6 @@ const ICON_BG_COLORS = [
   "bg-indigo-500/20 text-indigo-400",
 ];
 
-const ACCOUNT_DOT_COLORS = [
-  "bg-red-400", "bg-blue-400", "bg-emerald-400", "bg-violet-400",
-  "bg-amber-400", "bg-sky-400", "bg-pink-400", "bg-teal-400",
-];
 
 function hashStr(s: string) {
   let h = 0;
@@ -321,7 +268,7 @@ function groupByDate(records: WalletRecord[]) {
   return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
 }
 
-function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
+function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: WalletRecord[]; accounts: Account[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -349,7 +296,9 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
               const highlighted = r.id === highlightedId;
               const Icon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
               const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
-              const dotColor = ACCOUNT_DOT_COLORS[hashStr(r.accountName) % ACCOUNT_DOT_COLORS.length];
+              const account = accounts.find((a) => a.id === r.accountId);
+              const AccountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
+              const accountColor = account?.color ?? "var(--muted-foreground)";
               const cleared = r.recordState === "cleared" || r.recordState === "reconciled";
 
               return (
@@ -381,7 +330,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
 
                   {/* Account */}
                   <div className="flex items-center gap-1.5 min-w-0 w-36 shrink-0">
-                    <span className={`size-2 rounded-full shrink-0 ${dotColor}`} />
+                    <AccountIcon weight="fill" className="size-3.5 shrink-0" style={{ color: accountColor }} />
                     <span className="text-sm text-muted truncate">{r.accountName}</span>
                   </div>
 
@@ -613,7 +562,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
+              <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
             </div>
           )}
         </main>

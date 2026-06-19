@@ -27,9 +27,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
-import { getCategoryIcon } from "@/lib/utils";
+import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
 type RecordType = "expense" | "income" | "transfer";
+
 
 const PAYMENT_TYPES: { id: string; label: string }[] = [
   { id: "cash", label: "Cash" },
@@ -162,7 +163,14 @@ function AccountSelect({
           type="button"
           className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
-          <span className={selected ? "text-foreground" : "text-muted"}>{selected ? selected.name : placeholder}</span>
+          {selected ? (
+            <span className="flex items-center gap-2 min-w-0">
+              {(() => { const Icon = getAccountIcon(selected.accountType, selected.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: selected.color ?? "var(--muted-foreground)" }} />; })()}
+              <span className="truncate text-foreground">{selected.name}</span>
+            </span>
+          ) : (
+            <span className="text-muted">{placeholder}</span>
+          )}
           <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
@@ -189,8 +197,9 @@ function AccountSelect({
               key={a.id}
               type="button"
               onClick={() => select(a.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
             >
+              {(() => { const Icon = getAccountIcon(a.accountType, a.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />; })()}
               <span className="truncate">{a.name}</span>
             </button>
           ))}
@@ -254,7 +263,15 @@ function CategorySelect({
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
-              {(() => { const Icon = getCategoryIcon(selected.name, selected.group?.name); return <Icon className="size-3.5 shrink-0 text-muted" />; })()}
+              {(() => {
+                const Icon = getCategoryIcon(selected.name, selected.group?.name);
+                const color = selected.color ?? "#888";
+                return (
+                  <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                    <Icon className="size-3" />
+                  </span>
+                );
+              })()}
               <span className="truncate">{selected.name}</span>
             </span>
           ) : (
@@ -289,14 +306,17 @@ function CategorySelect({
               </div>
               {items.map((c) => {
                 const Icon = getCategoryIcon(c.name, groupName);
+                const color = c.color ?? "#888";
                 return (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => select(c.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
                   >
-                    <Icon className="size-3.5 shrink-0 text-muted" />
+                    <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                      <Icon className="size-3" />
+                    </span>
                     <span className="truncate">{c.name}</span>
                   </button>
                 );
@@ -305,14 +325,17 @@ function CategorySelect({
           ))}
           {ungrouped.map((c) => {
             const Icon = getCategoryIcon(c.name);
+            const color = c.color ?? "#888";
             return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => select(c.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
               >
-                <Icon className="size-3.5 shrink-0 text-muted" />
+                <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
+                  <Icon className="size-3" />
+                </span>
                 <span className="truncate">{c.name}</span>
               </button>
             );

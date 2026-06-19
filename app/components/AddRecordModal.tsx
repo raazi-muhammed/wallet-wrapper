@@ -1,35 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Loader2,
-  Utensils,
-  Car,
-  ShoppingBag,
-  Heart,
-  Plane,
-  BookOpen,
-  Briefcase,
-  ArrowLeftRight,
-  Shield,
-  Landmark,
-  Zap,
-  Home,
-  RefreshCw,
-  Gift,
-  Sparkles,
-  TrendingUp,
-  PawPrint,
-  Users,
-  Banknote,
-  Coffee,
-  Dumbbell,
-  Music,
-  Pill,
-  Wrench,
-  Tag,
-  type LucideIcon,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +27,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchCategories } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
+import { getCategoryIcon } from "@/lib/utils";
 
 type RecordType = "expense" | "income" | "transfer";
 
@@ -72,42 +45,6 @@ const RECORD_STATES: { id: string; label: string }[] = [
   { id: "uncleared", label: "Uncleared" },
   { id: "reconciled", label: "Reconciled" },
 ];
-
-const CATEGORY_ICON_MAP: Array<[RegExp, LucideIcon]> = [
-  [/food|meal|dining|restaurant|snack|fast.?food|lunch|dinner|breakfast|cafe|coffee|tea|drink|beverage|pizza|burger/i, Utensils],
-  [/coffee|cafe/i, Coffee],
-  [/groceri|supermarket|vegetable|fruit|market/i, ShoppingBag],
-  [/transport|vehicle|car|taxi|uber|bus|train|fuel|petrol|parking|auto|bike|metro|commute/i, Car],
-  [/shopping|cloth|fashion|apparel|accessory|mall|store/i, ShoppingBag],
-  [/health|medical|doctor|hospital|pharmacy|medicine|clinic|dental|vision/i, Heart],
-  [/pill|drug|supplement|vitamin/i, Pill],
-  [/gym|fitness|sport|exercise|workout/i, Dumbbell],
-  [/entertainment|movie|cinema|game|fun|leisure|netflix|streaming|music/i, Music],
-  [/travel|flight|hotel|vacation|holiday|trip|tourism|airbnb/i, Plane],
-  [/education|school|book|course|tuition|learning|college|university/i, BookOpen],
-  [/salary|income|wage|earning|paycheck|bonus/i, Briefcase],
-  [/transfer|sent|received/i, ArrowLeftRight],
-  [/insurance/i, Shield],
-  [/financial|bank|fee|charge|fine|tax|advisory|penalty/i, Landmark],
-  [/utility|electric|water|gas|internet|wifi|phone|bill/i, Zap],
-  [/rent|housing|home|mortgage|maintenance|repair/i, Home],
-  [/maintenance|repair|fix|service/i, Wrench],
-  [/subscription|membership/i, RefreshCw],
-  [/gift|donation|charity|contribution/i, Gift],
-  [/personal|beauty|care|hair|spa|salon/i, Sparkles],
-  [/invest|stock|mutual|fund|crypto|trading/i, TrendingUp],
-  [/pet|animal|vet/i, PawPrint],
-  [/family|kids|child|baby|parent/i, Users],
-  [/salary|income|earning/i, Banknote],
-];
-
-function getCategoryIcon(name: string, groupName?: string): LucideIcon {
-  const text = `${name} ${groupName ?? ""}`;
-  for (const [pattern, icon] of CATEGORY_ICON_MAP) {
-    if (pattern.test(text)) return icon;
-  }
-  return Tag;
-}
 
 function fmt(value: number, currency: string) {
   try {

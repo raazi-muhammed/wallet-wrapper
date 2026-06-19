@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
+import { getCategoryIcon } from "@/lib/utils";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 import {
@@ -239,62 +240,128 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
+const ICON_BG_COLORS = [
+  "bg-pink-500/20 text-pink-400",
+  "bg-violet-500/20 text-violet-400",
+  "bg-emerald-500/20 text-emerald-400",
+  "bg-sky-500/20 text-sky-400",
+  "bg-amber-500/20 text-amber-400",
+  "bg-rose-500/20 text-rose-400",
+  "bg-teal-500/20 text-teal-400",
+  "bg-indigo-500/20 text-indigo-400",
+];
+
+const ACCOUNT_DOT_COLORS = [
+  "bg-red-400", "bg-blue-400", "bg-emerald-400", "bg-violet-400",
+  "bg-amber-400", "bg-sky-400", "bg-pink-400", "bg-teal-400",
+];
+
+function hashStr(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function fmtDateLong(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function groupByDate(records: WalletRecord[]) {
+  const map = new Map<string, WalletRecord[]>();
+  for (const r of records) {
+    const key = r.recordDate.slice(0, 10);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
+}
+
 function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecord[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
+
+  const groups = groupByDate(records);
+
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
-      <Table>
-        <TableHeader className="[&_tr]:border-0">
-          <TableRow className="border-0 hover:bg-transparent">
-            <TableHead className="text-muted font-medium">Date</TableHead>
-            <TableHead className="text-muted font-medium">Account</TableHead>
-            <TableHead className="text-muted font-medium">Category</TableHead>
-            <TableHead className="text-muted font-medium">Note</TableHead>
-            <TableHead className="text-muted font-medium">Payee</TableHead>
-            <TableHead className="text-muted font-medium">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {records.map((r) => {
-            const { value, currencyCode } = r.amount;
-            const positive = value > 0;
-            const highlighted = r.id === highlightedId;
-            return (
-              <TableRow
-                key={r.id}
-                data-record-id={r.id}
-                onClick={() => onEdit?.(r)}
-                className={`border-0 cursor-pointer odd:bg-white/[0.03] even:bg-transparent hover:bg-white/[0.07] ${highlighted ? "outline outline-2 outline-accent" : ""}`}
-              >
-                <TableCell className="text-foreground">{fmtDate(r.recordDate)}</TableCell>
-                <TableCell className="text-foreground">{r.accountName}</TableCell>
-                <TableCell>
-                  {r.category
-                    ? <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted whitespace-nowrap">{r.category.name}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  {r.note
-                    ? <span className="block max-w-[160px] truncate text-foreground">{r.note}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  {r.counterParty
-                    ? <span className="block max-w-[120px] truncate text-foreground">{r.counterParty}</span>
-                    : <span className="text-muted">—</span>}
-                </TableCell>
-                <TableCell>
-                  <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
-                    {positive ? "+" : ""}{fmt(value, currencyCode)}
-                  </span>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <div className="space-y-0 rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+      {groups.map(({ date, records: dayRecords }) => {
+        const currency = dayRecords[0]?.amount.currencyCode;
+        const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
+        return (
+          <div key={date}>
+            {/* Date header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+              <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
+              <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
+                {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
+              </span>
+            </div>
+            {/* Records */}
+            {dayRecords.map((r) => {
+              const { value, currencyCode } = r.amount;
+              const positive = value > 0;
+              const highlighted = r.id === highlightedId;
+              const Icon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
+              const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
+              const dotColor = ACCOUNT_DOT_COLORS[hashStr(r.accountName) % ACCOUNT_DOT_COLORS.length];
+              const cleared = r.recordState === "cleared" || r.recordState === "reconciled";
+
+              return (
+                <div
+                  key={r.id}
+                  data-record-id={r.id}
+                  onClick={() => onEdit?.(r)}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] hover:bg-white/[0.05] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                >
+                  {/* Category icon */}
+                  <div className="relative shrink-0">
+                    <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
+                      <Icon className="size-4" />
+                    </div>
+                    {cleared && (
+                      <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-success flex items-center justify-center">
+                        <svg viewBox="0 0 10 10" className="size-2 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category + payee */}
+                  <div className="min-w-0 w-40 shrink-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
+                    {r.counterParty && <p className="text-xs text-muted truncate">{r.counterParty}</p>}
+                  </div>
+
+                  {/* Account */}
+                  <div className="flex items-center gap-1.5 min-w-0 w-36 shrink-0">
+                    <span className={`size-2 rounded-full shrink-0 ${dotColor}`} />
+                    <span className="text-sm text-muted truncate">{r.accountName}</span>
+                  </div>
+
+                  {/* Note */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-muted truncate block">{r.note ?? ""}</span>
+                  </div>
+
+                  {/* Amount + time */}
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm font-semibold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
+                      {positive ? "+" : ""}{fmt(value, currencyCode)}
+                    </p>
+                    <p className="text-xs text-muted">{fmtTime(r.recordDate)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }

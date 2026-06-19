@@ -61,7 +61,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
           selected={value}
           onSelect={handleDaySelect}
           captionLayout="dropdown"
-          initialFocus
+          autoFocus
         />
         <div className="flex items-center gap-2 border-t border-white/10 px-4 py-3">
           <span className="text-xs text-muted">Time</span>

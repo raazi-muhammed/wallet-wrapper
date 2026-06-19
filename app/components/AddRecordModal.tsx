@@ -232,7 +232,7 @@ function AccountSelect({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto"
+        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto overflow-hidden"
         style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
         align="start"
         sideOffset={4}
@@ -247,12 +247,12 @@ function AccountSelect({
           />
         </div>
         <div className="overflow-y-auto flex-1 min-h-0">
-          {filtered.map((a) => (
+          {filtered.map((a, i) => (
             <button
               key={a.id}
               type="button"
               onClick={() => select(a.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-default transition-colors ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
+              className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
             >
               <span className="truncate">{a.name}</span>
             </button>
@@ -560,7 +560,7 @@ function RecordForm({
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+      <DialogHeader className="px-6 pt-6 pb-4">
         <DialogTitle className="text-base font-semibold text-foreground">
           {mode === "edit" ? "Edit record" : "Add record"}
         </DialogTitle>
@@ -772,9 +772,19 @@ function RecordForm({
       </div>
 
       {/* Footer */}
-      <div className="px-6 pb-6 pt-2 border-t border-border flex flex-col gap-2">
+      <div className="px-6 pb-6 pt-2 flex gap-2">
+        {mode === "add" && (
+          <Button
+            variant="outline"
+            className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+            onClick={() => submit(true)}
+            disabled={amount === undefined || !accountId || submitting}
+          >
+            Add and create another
+          </Button>
+        )}
         <Button
-          className="w-full"
+          className={mode === "add" ? "flex-1" : "w-full"}
           onClick={() => submit(false)}
           disabled={amount === undefined || !accountId || submitting}
         >
@@ -786,16 +796,6 @@ function RecordForm({
             mode === "edit" ? "Save changes" : "Add record"
           )}
         </Button>
-        {mode === "add" && (
-          <Button
-            variant="outline"
-            className="w-full border-border text-foreground hover:bg-default hover:text-foreground"
-            onClick={() => submit(true)}
-            disabled={amount === undefined || !accountId || submitting}
-          >
-            Add and create another
-          </Button>
-        )}
       </div>
     </div>
   );

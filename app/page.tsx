@@ -10,6 +10,10 @@ import {
   TrendingUp,
   Shield,
   CircleDashed,
+  Globe,
+  Gem,
+  Building2,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Table,
@@ -63,18 +67,55 @@ function fmtRelative(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Account type icons ────────────────────────────────────────────────────────
+// ── Account type icons (Phosphor, weight="fill") ──────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TYPE_ICONS: Record<string, ComponentType<any>> = {
-  General: Wallet,
-  Cash: Banknote,
-  CurrentAccount: Landmark,
-  SavingAccount: PiggyBank,
-  CreditCard: CreditCard,
-  Investment: TrendingUp,
-  Insurance: Shield,
+import {
+  Wallet as PhWallet,
+  Bank as PhBank,
+  CreditCard as PhCreditCard,
+  PiggyBank as PhPiggyBank,
+  TrendUp as PhTrendUp,
+  ShieldCheck as PhShieldCheck,
+  Globe as PhGlobe,
+  Coins as PhCoins,
+  Buildings as PhBuildings,
+  Vault as PhVault,
+  HandCoins as PhHandCoins,
+} from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+
+const TYPE_ICONS: Record<string, PhosphorIcon> = {
+  General: PhWallet,
+  Cash: PhHandCoins,
+  CurrentAccount: PhBank,
+  SavingAccount: PhVault,
+  CreditCard: PhCreditCard,
+  Investment: PhTrendUp,
+  Insurance: PhShieldCheck,
+  EWallet: PhWallet,
+  Loan: PhBuildings,
+  Asset: PhCoins,
+  Commodity: PhCoins,
+  Debt: PhBuildings,
+  MutualFund: PhTrendUp,
+  Checking: PhBank,
+  Online: PhGlobe,
 };
+
+const NAME_ICONS: Array<[RegExp, PhosphorIcon]> = [
+  [/paypal|stripe|razorpay|paytm|gpay|google.?pay|apple.?pay|amazon.?pay|upi/i, PhGlobe],
+  [/gold|silver|crypto|bitcoin|eth/i, PhCoins],
+  [/fd|fixed.?deposit|bond/i, PhVault],
+  [/loan|debt|mortgage/i, PhBuildings],
+];
+
+function getAccountIcon(accountType: string, accountName: string): PhosphorIcon {
+  if (TYPE_ICONS[accountType]) return TYPE_ICONS[accountType];
+  for (const [pattern, icon] of NAME_ICONS) {
+    if (pattern.test(accountName)) return icon;
+  }
+  return PhWallet;
+}
 
 // ── Settings Popover ──────────────────────────────────────────────────────────
 
@@ -500,7 +541,7 @@ export default function Home() {
                 <SidebarMenu>
                   {activeAccounts.map((a) => {
                     const count = allRecords.filter((r) => r.accountId === a.id).length;
-                    const Icon = TYPE_ICONS[a.accountType] ?? CircleDashed;
+                    const Icon = getAccountIcon(a.accountType, a.name);
                     const bal = a.balance.currentBalance;
                     return (
                       <SidebarMenuItem key={a.id}>
@@ -511,7 +552,7 @@ export default function Home() {
                           className="justify-between h-auto py-2"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <Icon className="size-4 shrink-0 text-sidebar-foreground/60" />
+                            <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{a.name}</p>
                               <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>

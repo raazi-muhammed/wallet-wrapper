@@ -111,7 +111,7 @@ function SettingsPopover({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="API settings"
-        className="flex items-center justify-center size-8 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
+        className="flex items-center justify-center size-10 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4">
           <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4Z"/>
@@ -121,7 +121,7 @@ function SettingsPopover({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed top-14 right-4 z-50 w-80 rounded-xl border border-border bg-background shadow-lg space-y-4 p-4">
+          <div className="fixed top-4 right-4 z-50 w-80 rounded-xl border border-border shadow-lg space-y-4 p-4" style={{ background: "hsl(240 3% 10%)" }}>
             <p className="text-sm font-semibold text-foreground">API Connection</p>
 
             <div className="space-y-1.5">
@@ -244,7 +244,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "oklch(0.08 0.02 268)" }}>
+    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
       <Table>
         <TableHeader className="[&_tr]:border-0">
           <TableRow className="border-0 hover:bg-transparent">
@@ -466,32 +466,6 @@ export default function Home() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Navbar */}
-        <header className="shrink-0 z-10 border-b border-border bg-white/5 backdrop-blur">
-          <div className="relative w-full px-4 h-14 flex items-center">
-            <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
-              {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
-              {token && (
-                <AddRecordButton
-                  token={token}
-                  accounts={activeAccounts}
-                  records={records}
-                  onSuccess={() => loadData(token)}
-                  onGoToRecord={handleGoToRecord}
-                />
-              )}
-              <SettingsPopover
-                token={token}
-                stats={stats}
-                onSave={handleSave}
-                onDisconnect={handleDisconnect}
-              />
-            </div>
-          </div>
-        </header>
-
-        {/* Main content */}
         <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
           {error && (
             <div className="mx-6 mt-6 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
@@ -503,13 +477,33 @@ export default function Home() {
 
           {(activeAccounts.length > 0 || records.length > 0) && (
             <div className="px-6 py-6 space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
-                <p className="text-xs text-muted mt-0.5">
-                  {recordsLoading
-                    ? "Loading…"
-                    : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · last 3 months`}
-                </p>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    {recordsLoading
+                      ? "Loading…"
+                      : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · last 3 months`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
+                  {token && (
+                    <AddRecordButton
+                      token={token}
+                      accounts={activeAccounts}
+                      records={records}
+                      onSuccess={() => loadData(token)}
+                      onGoToRecord={handleGoToRecord}
+                    />
+                  )}
+                  <SettingsPopover
+                    token={token}
+                    stats={stats}
+                    onSave={handleSave}
+                    onDisconnect={handleDisconnect}
+                  />
+                </div>
               </div>
               <RecordsTable records={displayedRecords} highlightedId={highlightedId} onEdit={setEditingRecord} />
             </div>

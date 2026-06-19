@@ -5,62 +5,64 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
 
-  /* ── Core surfaces (deep indigo navy) ──────── */
-  --color-background:      oklch(0.10 0.13 268);
-  --color-foreground:      oklch(0.97 0 0);
-  --color-default:         oklch(0.16 0.12 268);
-  --color-default-hover:   oklch(0.22 0.12 268);
-  --color-border:          oklch(0.22 0.10 268);
-  --color-separator:       oklch(0.22 0.10 268);
-  --color-input:           oklch(0.22 0.10 268);
-  --color-ring:            oklch(0.55 0.22 264);
-  --color-popover:         oklch(0.13 0.12 268);
-  --color-popover-foreground: oklch(0.97 0 0);
+  /* ── Core surfaces ─────────────────────────── */
+  --color-background:      hsl(240 3% 8%);
+  --color-foreground:      hsl(0 0% 97%);
+  --color-default:         hsl(240 3% 14%);
+  --color-default-hover:   hsl(240 3% 19%);
+  --color-border:          hsl(240 3% 18%);
+  --color-separator:       hsl(240 3% 18%);
+  --color-input:           hsl(240 3% 18%);
+  --color-ring:            hsl(224 76% 55%);
+  --color-popover:         hsl(240 3% 10%);
+  --color-popover-foreground: hsl(0 0% 97%);
 
   /* ── Text ──────────────────────────────────── */
-  --color-muted:            oklch(0.55 0.07 268);
-  --color-muted-foreground: oklch(0.55 0.07 268);
+  --color-muted:            hsl(240 3% 50%);
+  --color-muted-foreground: hsl(240 3% 50%);
 
-  /* ── Accent / primary (blue) ───────────────── */
-  --color-accent:           oklch(0.55 0.22 264);
-  --color-accent-hover:     oklch(0.48 0.22 264);
-  --color-accent-foreground: oklch(0.99 0 0);
-  --color-primary:          oklch(0.55 0.22 264);
-  --color-primary-foreground: oklch(0.99 0 0);
+  /* ── Accent / primary ──────────────────────── */
+  --color-accent:           hsl(224 76% 55%);
+  --color-accent-hover:     hsl(224 76% 48%);
+  --color-accent-foreground: hsl(0 0% 99%);
+  --color-primary:          hsl(224 76% 55%);
+  --color-primary-foreground: hsl(0 0% 99%);
 
   /* ── Card / secondary ──────────────────────── */
-  --color-card:             oklch(0.13 0.12 268);
-  --color-card-foreground:  oklch(0.97 0 0);
-  --color-secondary:        oklch(0.16 0.12 268);
-  --color-secondary-foreground: oklch(0.97 0 0);
+  --color-card:             hsl(240 3% 10%);
+  --color-card-foreground:  hsl(0 0% 97%);
+  --color-secondary:        hsl(240 3% 14%);
+  --color-secondary-foreground: hsl(0 0% 97%);
 
   /* ── Semantic ──────────────────────────────── */
-  --color-success:                oklch(0.65 0.18 145);
-  --color-warning:                oklch(0.75 0.17 85);
-  --color-danger:                 oklch(0.63 0.22 25);
-  --color-danger-soft:            oklch(0.63 0.22 25 / 0.12);
-  --color-danger-soft-foreground: oklch(0.78 0.14 25);
-  --color-destructive:            oklch(0.63 0.22 25);
-  --color-destructive-foreground: oklch(0.97 0 0);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
+  --color-success:                hsl(142 60% 50%);
+  --color-warning:                hsl(38 90% 55%);
+  --color-danger:                 hsl(4 80% 55%);
+  --color-danger-soft:            hsl(4 80% 55% / 0.12);
+  --color-danger-soft-foreground: hsl(4 60% 70%);
+  --color-destructive:            hsl(4 80% 55%);
+  --color-destructive-foreground: hsl(0 0% 97%);
+
+  /* ── Sidebar tokens ────────────────────────── */
+  --color-sidebar:                    var(--sidebar);
+  --color-sidebar-foreground:         var(--sidebar-foreground);
+  --color-sidebar-primary:            var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
+  --color-sidebar-accent:             var(--sidebar-accent);
+  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
+  --color-sidebar-border:             var(--sidebar-border);
+  --color-sidebar-ring:               var(--sidebar-ring);
 }
 
-/* Border-radius scale — mapped so all rounded-* utilities are noticeably rounder */
+/* Border-radius scale */
 @theme inline {
-  --radius-xs:  0.625rem;  /* 10px */
-  --radius-sm:  0.75rem;   /* 12px */
-  --radius-md:  1rem;      /* 16px */
-  --radius-lg:  1.25rem;   /* 20px */
-  --radius-xl:  1.5rem;    /* 24px */
-  --radius-2xl: 1.875rem;  /* 30px */
-  --radius-3xl: 2.5rem;    /* 40px */
+  --radius-xs:  0.625rem;
+  --radius-sm:  0.75rem;
+  --radius-md:  1rem;
+  --radius-lg:  1.25rem;
+  --radius-xl:  1.5rem;
+  --radius-2xl: 1.875rem;
+  --radius-3xl: 2.5rem;
 }
 
 @layer base {
@@ -70,31 +72,31 @@
 
   body {
     background:
-      radial-gradient(ellipse 70% 55% at 10% 0%,   oklch(0.22 0.08 275 / 0.5) 0%, transparent 65%),
-      radial-gradient(ellipse 55% 45% at 90% 100%,  oklch(0.20 0.07 260 / 0.4) 0%, transparent 60%),
-      oklch(0.09 0.06 268);
+      radial-gradient(ellipse 70% 55% at 10% 0%,   hsl(240 20% 20% / 0.3) 0%, transparent 65%),
+      radial-gradient(ellipse 55% 45% at 90% 100%,  hsl(224 20% 18% / 0.25) 0%, transparent 60%),
+      hsl(240 3% 7%);
     min-height: 100vh;
   }
 }
 
 :root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar: hsl(240 3% 98%);
+  --sidebar-foreground: hsl(240 3% 26%);
+  --sidebar-primary: hsl(224 76% 48%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-accent: hsl(240 3% 94%);
+  --sidebar-accent-foreground: hsl(240 3% 10%);
+  --sidebar-border: hsl(240 3% 88%);
+  --sidebar-ring: hsl(224 76% 55%);
 }
 
 .dark {
-  --sidebar: hsl(240 5% 7%);
-  --sidebar-foreground: hsl(240 5% 96%);
+  --sidebar: hsl(240 3% 10%);
+  --sidebar-foreground: hsl(240 3% 96%);
   --sidebar-primary: hsl(224 76% 48%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 5% 13%);
-  --sidebar-accent-foreground: hsl(240 5% 96%);
-  --sidebar-border: hsl(240 5% 17%);
-  --sidebar-ring: hsl(217 91% 60%);
+  --sidebar-accent: hsl(240 3% 15%);
+  --sidebar-accent-foreground: hsl(240 3% 96%);
+  --sidebar-border: hsl(240 3% 17%);
+  --sidebar-ring: hsl(224 76% 55%);
 }

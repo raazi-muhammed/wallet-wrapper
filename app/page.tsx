@@ -316,7 +316,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
                   key={r.id}
                   data-record-id={r.id}
                   onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] hover:bg-white/[0.05] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
                   {/* Category icon */}
                   <div className="relative shrink-0">

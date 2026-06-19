@@ -23,6 +23,19 @@ import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -223,50 +236,6 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
 
 // ── Sidebar Account Item ──────────────────────────────────────────────────────
 
-function SidebarAccountItem({
-  account,
-  recordCount,
-  selected,
-  onClick,
-}: {
-  account: Account;
-  recordCount: number;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const { currentBalance, currencyCode } = account.balance;
-  const Icon = TYPE_ICONS[account.accountType] ?? CircleDashed;
-  const positive = currentBalance >= 0;
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
-        selected
-          ? "bg-accent/15 text-foreground"
-          : "text-muted hover:bg-default hover:text-foreground"
-      }`}
-    >
-      <div className="flex items-center gap-2.5">
-        <Icon className={`size-3.5 shrink-0 ${selected ? "text-accent" : "text-muted group-hover:text-foreground"}`} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-sm font-medium truncate">{account.name}</span>
-            <span className="text-xs font-mono text-muted shrink-0">{currencyCode}</span>
-          </div>
-          <div className="flex items-center justify-between gap-1 mt-0.5">
-            <span className={`text-xs font-mono tabular-nums ${positive ? "text-success" : "text-danger"}`}>
-              {fmt(currentBalance, currencyCode)}
-            </span>
-            {recordCount > 0 && (
-              <span className="text-xs text-muted shrink-0">{recordCount}</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
@@ -431,71 +400,96 @@ export default function Home() {
       : activeAccounts.find((a) => a.id === selectedAccount)?.name ?? "Records";
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Navbar */}
-      <header className="shrink-0 z-10 border-b border-border bg-white/5 backdrop-blur">
-        <div className="relative w-full px-4 h-14 flex items-center">
-          <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
-            {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
-            {token && (
-              <AddRecordButton
+    <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
+      {/* Sidebar */}
+      {activeAccounts.length > 0 && (
+        <Sidebar variant="floating">
+          <SidebarHeader className="px-4 pt-4 pb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup className="pt-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={selectedAccount === "all"}
+                      onClick={() => handleAccountSelect("all")}
+                      size="lg"
+                      className="justify-between"
+                    >
+                      <span className="font-medium">All Accounts</span>
+                      <span className="text-xs text-sidebar-foreground/50">{allRecords.length}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {activeAccounts.map((a) => {
+                    const count = allRecords.filter((r) => r.accountId === a.id).length;
+                    const Icon = TYPE_ICONS[a.accountType] ?? CircleDashed;
+                    const bal = a.balance.currentBalance;
+                    return (
+                      <SidebarMenuItem key={a.id}>
+                        <SidebarMenuButton
+                          isActive={selectedAccount === a.id}
+                          onClick={() => handleAccountSelect(a.id)}
+                          size="lg"
+                          className="justify-between h-auto py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon className="size-4 shrink-0 text-sidebar-foreground/60" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{a.name}</p>
+                              <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
+                                {fmt(bal, a.balance.currencyCode)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
+      )}
+
+      {/* Main area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Navbar */}
+        <header className="shrink-0 z-10 border-b border-border bg-white/5 backdrop-blur">
+          <div className="relative w-full px-4 h-14 flex items-center">
+            <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
+              {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
+              {token && (
+                <AddRecordButton
+                  token={token}
+                  accounts={activeAccounts}
+                  records={records}
+                  onSuccess={() => loadData(token)}
+                  onGoToRecord={handleGoToRecord}
+                />
+              )}
+              <SettingsPopover
                 token={token}
-                accounts={activeAccounts}
-                records={records}
-                onSuccess={() => loadData(token)}
-                onGoToRecord={handleGoToRecord}
+                stats={stats}
+                onSave={handleSave}
+                onDisconnect={handleDisconnect}
               />
-            )}
-            <SettingsPopover
-              token={token}
-              stats={stats}
-              onSave={handleSave}
-              onDisconnect={handleDisconnect}
-            />
-          </div>
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {activeAccounts.length > 0 && (
-          <aside className="w-64 shrink-0 border-r border-border flex flex-col overflow-hidden backdrop-blur-sm" style={{ background: "oklch(0.12 0.11 268 / 0.7)" }}>
-            <div className="px-4 py-4 shrink-0">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted">Accounts</p>
             </div>
-            <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-              <button
-                onClick={() => handleAccountSelect("all")}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                  selectedAccount === "all"
-                    ? "bg-accent/15 text-foreground"
-                    : "text-muted hover:bg-default hover:text-foreground"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">All Accounts</span>
-                  <span className="text-xs text-muted">{allRecords.length}</span>
-                </div>
-              </button>
-
-              <div className="my-2 border-t border-border" />
-
-              {activeAccounts.map((a) => {
-                const count = allRecords.filter((r) => r.accountId === a.id).length;
-                return (
-                  <SidebarAccountItem
-                    key={a.id}
-                    account={a}
-                    recordCount={count}
-                    selected={selectedAccount === a.id}
-                    onClick={() => handleAccountSelect(a.id)}
-                  />
-                );
-              })}
-            </nav>
-          </aside>
-        )}
+          </div>
+        </header>
 
         {/* Main content */}
         <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
@@ -535,6 +529,6 @@ export default function Home() {
           onGoToRecord={handleGoToRecord}
         />
       )}
-    </div>
+    </SidebarProvider>
   );
 }

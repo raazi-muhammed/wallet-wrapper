@@ -284,9 +284,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
             <TableHead className="text-muted font-medium">Category</TableHead>
             <TableHead className="text-muted font-medium">Note</TableHead>
             <TableHead className="text-muted font-medium">Payee</TableHead>
-            <TableHead className="text-muted font-medium">Payment</TableHead>
             <TableHead className="text-muted font-medium">Amount</TableHead>
-            <TableHead className="w-8" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -298,7 +296,8 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
               <TableRow
                 key={r.id}
                 data-record-id={r.id}
-                className={`border-border ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                onClick={() => onEdit?.(r)}
+                className={`border-border cursor-pointer hover:bg-default/50 ${highlighted ? "outline outline-2 outline-accent" : ""}`}
               >
                 <TableCell className="text-foreground">{fmtDate(r.recordDate)}</TableCell>
                 <TableCell className="text-foreground">{r.accountName}</TableCell>
@@ -318,25 +317,9 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
                     : <span className="text-muted">—</span>}
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-default text-muted capitalize whitespace-nowrap">
-                    {r.paymentType.replace(/_/g, " ")}
-                  </span>
-                </TableCell>
-                <TableCell>
                   <span className={`font-mono font-semibold tabular-nums whitespace-nowrap ${positive ? "text-success" : "text-danger"}`}>
                     {positive ? "+" : ""}{fmt(value, currencyCode)}
                   </span>
-                </TableCell>
-                <TableCell>
-                  <button
-                    onClick={() => onEdit?.(r)}
-                    className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-default transition-colors"
-                    aria-label="Edit record"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
                 </TableCell>
               </TableRow>
             );

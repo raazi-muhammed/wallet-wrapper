@@ -275,10 +275,10 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl overflow-hidden" style={{ background: "oklch(0.08 0.02 268)" }}>
       <Table>
-        <TableHeader>
-          <TableRow className="border-border hover:bg-transparent">
+        <TableHeader className="[&_tr]:border-0">
+          <TableRow className="border-0 hover:bg-transparent">
             <TableHead className="text-muted font-medium">Date</TableHead>
             <TableHead className="text-muted font-medium">Account</TableHead>
             <TableHead className="text-muted font-medium">Category</TableHead>
@@ -297,7 +297,7 @@ function RecordsTable({ records, highlightedId, onEdit }: { records: WalletRecor
                 key={r.id}
                 data-record-id={r.id}
                 onClick={() => onEdit?.(r)}
-                className={`border-border cursor-pointer hover:bg-default/50 ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                className={`border-0 cursor-pointer odd:bg-white/[0.03] even:bg-transparent hover:bg-white/[0.07] ${highlighted ? "outline outline-2 outline-accent" : ""}`}
               >
                 <TableCell className="text-foreground">{fmtDate(r.recordDate)}</TableCell>
                 <TableCell className="text-foreground">{r.accountName}</TableCell>
@@ -431,9 +431,9 @@ export default function Home() {
       : activeAccounts.find((a) => a.id === selectedAccount)?.name ?? "Records";
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Navbar */}
-      <header className="shrink-0 z-10 border-b border-border bg-background/80 backdrop-blur">
+      <header className="shrink-0 z-10 border-b border-border bg-white/5 backdrop-blur">
         <div className="relative w-full px-4 h-14 flex items-center">
           <h1 className="text-base font-semibold text-foreground">Wallet Dashboard</h1>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-end gap-3">
@@ -460,7 +460,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         {activeAccounts.length > 0 && (
-          <aside className="w-64 shrink-0 border-r border-border flex flex-col overflow-hidden">
+          <aside className="w-64 shrink-0 border-r border-border flex flex-col overflow-hidden backdrop-blur-sm" style={{ background: "oklch(0.12 0.11 268 / 0.7)" }}>
             <div className="px-4 py-4 shrink-0">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted">Accounts</p>
             </div>

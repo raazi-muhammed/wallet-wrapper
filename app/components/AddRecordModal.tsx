@@ -603,14 +603,14 @@ function RecordForm({
                 <button
                   type="button"
                   onClick={setDateToday}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={setDateYesterday}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border border-border bg-background text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Yesterday
                 </button>

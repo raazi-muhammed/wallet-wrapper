@@ -3,21 +3,21 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
 
-  /* ── Core surfaces ─────────────────────────── */
-  --color-background:      oklch(0.09 0 0);
+  /* ── Core surfaces (deep indigo navy) ──────── */
+  --color-background:      oklch(0.10 0.13 268);
   --color-foreground:      oklch(0.97 0 0);
-  --color-default:         oklch(0.16 0 0);
-  --color-default-hover:   oklch(0.21 0 0);
-  --color-border:          oklch(0.22 0 0);
-  --color-separator:       oklch(0.22 0 0);
-  --color-input:           oklch(0.22 0 0);
+  --color-default:         oklch(0.16 0.12 268);
+  --color-default-hover:   oklch(0.22 0.12 268);
+  --color-border:          oklch(0.22 0.10 268);
+  --color-separator:       oklch(0.22 0.10 268);
+  --color-input:           oklch(0.22 0.10 268);
   --color-ring:            oklch(0.55 0.22 264);
-  --color-popover:         oklch(0.12 0 0);
+  --color-popover:         oklch(0.13 0.12 268);
   --color-popover-foreground: oklch(0.97 0 0);
 
   /* ── Text ──────────────────────────────────── */
-  --color-muted:            oklch(0.53 0 0);
-  --color-muted-foreground: oklch(0.53 0 0);
+  --color-muted:            oklch(0.55 0.07 268);
+  --color-muted-foreground: oklch(0.55 0.07 268);
 
   /* ── Accent / primary (blue) ───────────────── */
   --color-accent:           oklch(0.55 0.22 264);
@@ -27,9 +27,9 @@
   --color-primary-foreground: oklch(0.99 0 0);
 
   /* ── Card / secondary ──────────────────────── */
-  --color-card:             oklch(0.12 0 0);
+  --color-card:             oklch(0.13 0.12 268);
   --color-card-foreground:  oklch(0.97 0 0);
-  --color-secondary:        oklch(0.16 0 0);
+  --color-secondary:        oklch(0.16 0.12 268);
   --color-secondary-foreground: oklch(0.97 0 0);
 
   /* ── Semantic ──────────────────────────────── */
@@ -56,5 +56,13 @@
 @layer base {
   :root {
     --radius: 1rem;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse 70% 55% at 10% 0%,   oklch(0.22 0.08 275 / 0.5) 0%, transparent 65%),
+      radial-gradient(ellipse 55% 45% at 90% 100%,  oklch(0.20 0.07 260 / 0.4) 0%, transparent 60%),
+      oklch(0.09 0.06 268);
+    min-height: 100vh;
   }
 }

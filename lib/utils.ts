@@ -60,7 +60,7 @@ const ACCOUNT_TYPE_ICONS: Record<string, PhosphorIcon> = {
   CurrentAccount: PhBank,
   SavingAccount: PhVault,
   CreditCard: PhCreditCard,
-  Investment: PhTrendUp,
+  Investment: PhPiggyBank,
   Insurance: PhShieldCheck,
   EWallet: PhWallet,
   Loan: PhBuildings,

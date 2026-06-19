@@ -121,7 +121,7 @@ function SettingsPopover({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed top-4 right-4 z-50 w-80 rounded-xl border border-border shadow-lg space-y-4 p-4" style={{ background: "hsl(240 3% 10%)" }}>
+          <div className="fixed top-4 right-4 z-50 w-80 rounded-xl shadow-lg space-y-4 p-4" style={{ background: "#0F0F0F" }}>
             <p className="text-sm font-semibold text-foreground">API Connection</p>
 
             <div className="space-y-1.5">

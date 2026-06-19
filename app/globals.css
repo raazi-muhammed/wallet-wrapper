@@ -6,7 +6,7 @@
   --font-sans: var(--font-geist-sans);
 
   /* ── Core surfaces ─────────────────────────── */
-  --color-background:      hsl(240 3% 8%);
+  --color-background:      #0F0F0F;
   --color-foreground:      hsl(0 0% 97%);
   --color-default:         hsl(240 3% 14%);
   --color-default-hover:   hsl(240 3% 19%);

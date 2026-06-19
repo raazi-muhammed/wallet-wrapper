@@ -18,6 +18,7 @@ import {
   Buildings as PhBuildings,
   Vault as PhVault,
   HandCoins as PhHandCoins,
+  Money as PhMoney,
 } from "@phosphor-icons/react"
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react"
 
@@ -55,7 +56,7 @@ const CATEGORY_ICON_MAP: Array<[RegExp, LucideIcon]> = [
 
 const ACCOUNT_TYPE_ICONS: Record<string, PhosphorIcon> = {
   General: PhWallet,
-  Cash: PhHandCoins,
+  Cash: PhMoney,
   CurrentAccount: PhBank,
   SavingAccount: PhVault,
   CreditCard: PhCreditCard,

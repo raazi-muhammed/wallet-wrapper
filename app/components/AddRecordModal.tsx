@@ -437,8 +437,8 @@ function RecordForm({
   function applySuggestion(r: WalletRecord) {
     setNote(r.note ?? "");
     setPayer(r.counterParty ?? "");
-    setAmount(Math.abs(r.amount.value));
-    setAccountId(r.accountId);
+    if (amount === undefined) setAmount(Math.abs(r.amount.value));
+    if (!accountId) setAccountId(r.accountId);
     if (r.category?.id) setCategoryId(r.category.id);
     const rt = deriveType(r);
     setRecordType(rt);

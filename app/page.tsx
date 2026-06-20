@@ -485,38 +485,50 @@ export default function Home() {
 
             <SidebarSeparator />
 
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {activeAccounts.map((a) => {
-                    const count = allRecords.filter((r) => r.accountId === a.id).length;
-                    const Icon = getAccountIcon(a.accountType, a.name);
-                    const bal = a.balance.currentBalance;
-                    return (
-                      <SidebarMenuItem key={a.id}>
-                        <SidebarMenuButton
-                          isActive={selectedAccount === a.id}
-                          onClick={() => handleAccountSelect(a.id)}
-                          size="lg"
-                          className="justify-between h-auto py-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{a.name}</p>
-                              <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
-                                {fmt(bal, a.balance.currencyCode)}
-                              </p>
+            {Array.from(
+              activeAccounts.reduce((map, a) => {
+                const type = a.accountType || "Other";
+                if (!map.has(type)) map.set(type, []);
+                map.get(type)!.push(a);
+                return map;
+              }, new Map<string, typeof activeAccounts>())
+            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accounts]) => (
+              <SidebarGroup key={type} className="pt-0 pl-0">
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-widest px-2">
+                  {type.replace(/([A-Z])/g, " $1").trim()}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {accounts.map((a) => {
+                      const count = allRecords.filter((r) => r.accountId === a.id).length;
+                      const Icon = getAccountIcon(a.accountType, a.name);
+                      const bal = a.balance.currentBalance;
+                      return (
+                        <SidebarMenuItem key={a.id}>
+                          <SidebarMenuButton
+                            isActive={selectedAccount === a.id}
+                            onClick={() => handleAccountSelect(a.id)}
+                            size="lg"
+                            className="justify-between h-auto py-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{a.name}</p>
+                                <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
+                                  {fmt(bal, a.balance.currencyCode)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                            <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
           </SidebarContent>
         </Sidebar>
       )}
@@ -549,7 +561,8 @@ export default function Home() {
                     <AddRecordButton
                       token={token}
                       accounts={activeAccounts}
-                      records={records}
+                      records={allRecords}
+                      defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
                       onSuccess={() => loadData(token)}
                       onGoToRecord={handleGoToRecord}
                     />

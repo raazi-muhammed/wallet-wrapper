@@ -67,11 +67,12 @@ interface AddProps {
   token: string;
   accounts: Account[];
   records: WalletRecord[];
+  defaultAccountId?: string;
   onSuccess: () => void;
   onGoToRecord: (id: string) => void;
 }
 
-export function AddRecordButton({ token, accounts, records, onSuccess, onGoToRecord }: AddProps) {
+export function AddRecordButton({ token, accounts, records, defaultAccountId, onSuccess, onGoToRecord }: AddProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -86,6 +87,7 @@ export function AddRecordButton({ token, accounts, records, onSuccess, onGoToRec
             token={token}
             accounts={accounts}
             records={records}
+            defaultAccountId={defaultAccountId}
             onSuccess={() => { setOpen(false); onSuccess(); }}
             onCancel={() => setOpen(false)}
             onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
@@ -191,7 +193,7 @@ function AccountSelect({
             className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
           />
         </div>
-        <div className="overflow-y-auto flex-1 min-h-0">
+        <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
           {filtered.map((a, i) => (
             <button
               key={a.id}
@@ -357,6 +359,7 @@ function RecordForm({
   token,
   accounts,
   records,
+  defaultAccountId,
   onSuccess,
   onCancel,
   onGoToRecord,
@@ -366,6 +369,7 @@ function RecordForm({
   token: string;
   accounts: Account[];
   records: WalletRecord[];
+  defaultAccountId?: string;
   onSuccess: () => void;
   onCancel: () => void;
   onGoToRecord: (id: string) => void;
@@ -378,7 +382,7 @@ function RecordForm({
 
   const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
-  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
@@ -433,8 +437,8 @@ function RecordForm({
   function applySuggestion(r: WalletRecord) {
     setNote(r.note ?? "");
     setPayer(r.counterParty ?? "");
-    setAmount(Math.abs(r.amount.value));
-    setAccountId(r.accountId);
+    if (amount === undefined) setAmount(Math.abs(r.amount.value));
+    if (!accountId) setAccountId(r.accountId);
     if (r.category?.id) setCategoryId(r.category.id);
     const rt = deriveType(r);
     setRecordType(rt);

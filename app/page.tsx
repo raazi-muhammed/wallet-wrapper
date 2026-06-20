@@ -493,7 +493,7 @@ export default function Home() {
                 return map;
               }, new Map<string, typeof activeAccounts>())
             ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accounts]) => (
-              <SidebarGroup key={type} className="pt-0 pl-0">
+              <SidebarGroup key={type} className="pt-0">
                 <SidebarGroupLabel className="text-[10px] uppercase tracking-widest px-2">
                   {type.replace(/([A-Z])/g, " $1").trim()}
                 </SidebarGroupLabel>

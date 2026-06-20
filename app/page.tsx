@@ -549,7 +549,7 @@ export default function Home() {
                     <AddRecordButton
                       token={token}
                       accounts={activeAccounts}
-                      records={records}
+                      records={allRecords}
                       defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
                       onSuccess={() => loadData(token)}
                       onGoToRecord={handleGoToRecord}

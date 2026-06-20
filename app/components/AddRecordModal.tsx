@@ -191,7 +191,7 @@ function AccountSelect({
             className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
           />
         </div>
-        <div className="overflow-y-auto flex-1 min-h-0">
+        <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
           {filtered.map((a, i) => (
             <button
               key={a.id}

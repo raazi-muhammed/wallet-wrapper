@@ -550,6 +550,7 @@ export default function Home() {
                       token={token}
                       accounts={activeAccounts}
                       records={records}
+                      defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
                       onSuccess={() => loadData(token)}
                       onGoToRecord={handleGoToRecord}
                     />

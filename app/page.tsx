@@ -368,6 +368,8 @@ export default function Home() {
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
+  const selectedAccountRef = useRef("all");
+  selectedAccountRef.current = selectedAccount;
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
@@ -378,20 +380,25 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadData = useCallback(async (t: string) => {
+  const loadData = useCallback(async (t: string, keepAccount?: string) => {
     if (!t) return;
     setLoading(true);
     setError("");
     try {
-      const [accts, recs, apiStats] = await Promise.all([
+      const [accts, allRecs, apiStats] = await Promise.all([
         fetchAccounts(t),
         fetchRecords(t),
         fetchApiStats(t),
       ]);
       setAccounts(accts);
-      setRecords(recs);
-      setAllRecords(recs);
-      setSelectedAccount("all");
+      setAllRecords(allRecs);
+      if (keepAccount && keepAccount !== "all") {
+        const filteredRecs = await fetchRecords(t, keepAccount);
+        setRecords(filteredRecs);
+      } else {
+        setRecords(allRecs);
+        setSelectedAccount("all");
+      }
       setStats(apiStats);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch data");
@@ -563,7 +570,7 @@ export default function Home() {
                       accounts={activeAccounts}
                       records={allRecords}
                       defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
-                      onSuccess={() => loadData(token)}
+                      onSuccess={() => loadData(token, selectedAccountRef.current)}
                       onGoToRecord={handleGoToRecord}
                     />
                   )}

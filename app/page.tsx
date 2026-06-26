@@ -13,6 +13,8 @@ import {
   Globe,
   Gem,
   Building2,
+  Search,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -26,7 +28,7 @@ import {
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
-import { AddRecordButton, RecordDetailModal } from "./components/AddRecordModal";
+import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 import {
   SidebarProvider,
@@ -390,6 +392,7 @@ export default function Home() {
   loadingMoreRef.current = loadingMore;
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
+  const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -510,11 +513,40 @@ export default function Home() {
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<WalletRecord[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchAbortRef.current) clearTimeout(searchAbortRef.current);
+    setSearchResults([]);
+    if (!search.trim() || !token) { setSearchLoading(false); return; }
+    let cancelled = false;
+    const q = search.trim();
+    setSearchLoading(true);
+    searchAbortRef.current = setTimeout(() => {
+      Promise.all([
+        fetchRecords(token, { from: "2000-01-01", limit: 200, note: q }),
+        fetchRecords(token, { from: "2000-01-01", limit: 200, counterParty: q }),
+      ]).then(([noteRes, cpRes]) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: WalletRecord[] = [];
+        for (const r of [...noteRes.records, ...cpRes.records]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        setSearchResults(merged);
+      }).catch(() => {}).finally(() => { if (!cancelled) setSearchLoading(false); });
+    }, 300);
+    return () => { cancelled = true; if (searchAbortRef.current) clearTimeout(searchAbortRef.current); };
+  }, [search, token]);
 
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
 
-  const displayedRecords = sorted(records);
+  const isSearching = search.trim().length > 0;
+  const displayedRecords = sorted(isSearching ? searchResults : records);
   const activeAccounts = accounts.filter((a) => !a.archived);
 
   const selectedAccountName =
@@ -698,18 +730,14 @@ export default function Home() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
-                  <p className="text-xs text-muted mt-0.5">
-                    {recordsLoading
-                      ? "Loading…"
-                      : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · ${
-                          period === "3m" ? "last 3 months"
-                          : period === "6m" ? "last 6 months"
-                          : period === "1y" ? "last year"
-                          : "all time"
-                        }`}
-                  </p>
+                  {isSearching && (
+                    <p className="text-xs text-muted mt-0.5">
+                      {searchLoading ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${search}"`}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  {!isSearching && (
                   <div className="flex items-center gap-0.5 rounded-full bg-white/[0.06] p-0.5">
                     {(["3m", "6m", "1y", "all"] as const).map((p) => (
                       <button
@@ -723,6 +751,7 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
+                  )}
                   {token && (
                     <AddRecordButton
                       token={token}
@@ -741,7 +770,23 @@ export default function Home() {
                   />
                 </div>
               </div>
-              {recordsLoading ? (
+              {/* Search bar */}
+              <div className="relative flex items-center">
+                <Search className="absolute left-3 size-3.5 text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search by note or payee…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-white/[0.05] text-foreground placeholder:text-muted focus:outline-none focus:bg-white/[0.09] transition-colors"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="absolute right-3 text-muted hover:text-foreground">
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
+              {recordsLoading && !isSearching ? (
                 <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
                   {([4, 3] as const).map((count, gi) => (
                     <div key={gi}>
@@ -774,7 +819,7 @@ export default function Home() {
               ) : (
                 <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
               )}
-              {!recordsLoading && hasMore && (
+              {!recordsLoading && !isSearching && hasMore && (
                 <div className="flex justify-center pt-2 pb-1">
                   <button
                     onClick={() => loadMore()}
@@ -796,6 +841,19 @@ export default function Home() {
           accounts={activeAccounts}
           isOpen={!!editingRecord}
           onClose={() => setEditingRecord(null)}
+          onDuplicate={() => { setDuplicatingRecord(editingRecord); setEditingRecord(null); }}
+        />
+      )}
+      {duplicatingRecord && (
+        <DuplicateRecordModal
+          record={duplicatingRecord}
+          token={token}
+          accounts={activeAccounts}
+          records={allRecords}
+          isOpen={!!duplicatingRecord}
+          onClose={() => setDuplicatingRecord(null)}
+          onSuccess={() => { setDuplicatingRecord(null); loadData(token, selectedAccountRef.current); }}
+          onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
         />
       )}
     </SidebarProvider>

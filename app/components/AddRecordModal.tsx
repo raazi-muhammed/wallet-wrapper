@@ -100,11 +100,12 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
 
 // ── Record Detail Modal ───────────────────────────────────────────────────────
 
-export function RecordDetailModal({ record, accounts, isOpen, onClose }: {
+export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplicate }: {
   record: WalletRecord;
   accounts: Account[];
   isOpen: boolean;
   onClose: () => void;
+  onDuplicate?: () => void;
 }) {
   const account = accounts.find((a) => a.id === record.accountId);
   const AccountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
@@ -187,6 +188,46 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose }: {
             </DetailRow>
           )}
         </div>
+
+        {onDuplicate && (
+          <div className="px-6 pb-5">
+            <button
+              onClick={() => { onClose(); onDuplicate(); }}
+              className="w-full py-2 rounded-xl border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
+            >
+              Duplicate record
+            </button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord }: {
+  record: WalletRecord;
+  token: string;
+  accounts: Account[];
+  records: WalletRecord[];
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  onGoToRecord: (id: string) => void;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
+        <RecordForm
+          mode="add"
+          initialRecord={record}
+          token={token}
+          accounts={accounts}
+          records={records}
+          defaultAccountId={record.accountId}
+          onSuccess={() => { onClose(); onSuccess(); }}
+          onCancel={onClose}
+          onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
+        />
       </DialogContent>
     </Dialog>
   );

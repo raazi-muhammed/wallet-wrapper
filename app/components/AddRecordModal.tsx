@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchCategories } from "../actions";
+import { fetchCategories, fetchRecords } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
@@ -98,35 +99,147 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
   );
 }
 
-// ── Edit Record Modal ─────────────────────────────────────────────────────────
+// ── Record Detail Modal ───────────────────────────────────────────────────────
 
-interface EditProps {
+export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplicate }: {
+  record: WalletRecord;
+  accounts: Account[];
+  isOpen: boolean;
+  onClose: () => void;
+  onDuplicate?: () => void;
+}) {
+  const account = accounts.find((a) => a.id === record.accountId);
+  const AccountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
+  const accountColor = account?.color ?? "var(--muted-foreground)";
+  const CategoryIcon = getCategoryIcon(record.category?.name ?? "", record.category?.group?.name);
+
+  const positive = record.amount.value > 0;
+  const recordType = record.recordType?.toLowerCase();
+  const typeLabel = recordType === "income" ? "Income" : recordType === "transfer" ? "Transfer" : "Expense";
+
+  const paymentLabel = PAYMENT_TYPES.find((p) => p.id === record.paymentType)?.label ?? record.paymentType;
+  const stateLabel = RECORD_STATES.find((s) => s.id === record.recordState)?.label ?? record.recordState ?? "—";
+
+  const date = record.recordDate ? new Date(record.recordDate) : null;
+  const dateStr = date
+    ? date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+    : "—";
+  const timeStr = date
+    ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-sm w-full p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-base">Record Details</DialogTitle>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              typeLabel === "Income" ? "bg-success/15 text-success" :
+              typeLabel === "Transfer" ? "bg-blue-500/15 text-blue-400" :
+              "bg-danger/15 text-danger"
+            }`}>{typeLabel}</span>
+          </div>
+          <p className={`text-3xl font-bold tabular-nums mt-3 ${positive ? "text-success" : "text-danger"}`}>
+            {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
+          </p>
+        </DialogHeader>
+
+        <div className="px-6 py-5 space-y-3.5">
+          <DetailRow label="Category">
+            <div className="flex items-center gap-2">
+              <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <CategoryIcon className="size-3" />
+              </div>
+              <span className="text-sm">{record.category?.name ?? "—"}</span>
+              {record.category?.group && (
+                <span className="text-xs text-muted">· {record.category.group.name}</span>
+              )}
+            </div>
+          </DetailRow>
+
+          <DetailRow label="Account">
+            <div className="flex items-center gap-2">
+              <AccountIcon weight="fill" className="size-4 shrink-0" style={{ color: accountColor }} />
+              <span className="text-sm">{record.accountName}</span>
+            </div>
+          </DetailRow>
+
+          <DetailRow label="Date">
+            <span className="text-sm">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</span>
+          </DetailRow>
+
+          <DetailRow label="Payment">
+            <span className="text-sm">{paymentLabel}</span>
+          </DetailRow>
+
+          <DetailRow label="Status">
+            <span className="text-sm">{stateLabel}</span>
+          </DetailRow>
+
+          {record.counterParty && (
+            <DetailRow label="Payer">
+              <span className="text-sm">{record.counterParty}</span>
+            </DetailRow>
+          )}
+
+          {record.note && (
+            <DetailRow label="Note">
+              <span className="text-sm text-muted">{record.note}</span>
+            </DetailRow>
+          )}
+        </div>
+
+        {onDuplicate && (
+          <div className="px-6 pb-5">
+            <button
+              onClick={() => { onClose(); onDuplicate(); }}
+              className="w-full py-2 rounded-xl border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
+            >
+              Duplicate record
+            </button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord }: {
+  record: WalletRecord;
   token: string;
   accounts: Account[];
   records: WalletRecord[];
-  record: WalletRecord;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   onGoToRecord: (id: string) => void;
-}
-
-export function EditRecordModal({ token, accounts, records, record, isOpen, onClose, onSuccess, onGoToRecord }: EditProps) {
+}) {
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
         <RecordForm
-          mode="edit"
+          mode="add"
           initialRecord={record}
           token={token}
           accounts={accounts}
           records={records}
+          defaultAccountId={record.accountId}
           onSuccess={() => { onClose(); onSuccess(); }}
           onCancel={onClose}
           onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
         />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-4">
+      <span className="text-xs text-muted w-16 shrink-0 pt-0.5">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -382,7 +495,7 @@ function RecordForm({
 
   const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
-  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
@@ -391,23 +504,49 @@ function RecordForm({
   const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
   const [recordDate, setRecordDate] = useState<Date>(() => new Date());
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [debouncedNote, setDebouncedNote] = useState(note);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
 
+  // Debounce note for suggestions query
   useEffect(() => {
-    if (!token) return;
-    fetchCategories(token).then(setCategories).catch(() => {});
-  }, [token]);
+    const t = setTimeout(() => setDebouncedNote(note), 300);
+    return () => clearTimeout(t);
+  }, [note]);
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories", token],
+    queryFn: () => fetchCategories(token),
+    enabled: !!token,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: apiSuggestions = [] } = useQuery({
+    queryKey: ["noteSuggestions", token, debouncedNote],
+    queryFn: async () => {
+      const q = debouncedNote.trim();
+      const [noteRes, cpRes] = await Promise.all([
+        fetchRecords(token, { from: "2000-01-01", limit: 10, note: q }),
+        fetchRecords(token, { from: "2000-01-01", limit: 10, counterParty: q }),
+      ]);
+      const seen = new Set<string>();
+      const merged: WalletRecord[] = [];
+      for (const r of [...noteRes.records, ...cpRes.records]) {
+        if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+      }
+      return merged.slice(0, 10);
+    },
+    enabled: !!token && debouncedNote.trim().length > 0,
+    staleTime: 30_000,
+    placeholderData: [] as WalletRecord[],
+  });
 
   useEffect(() => {
-    if (accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
-  }, [accounts, accountId]);
+    if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
+  }, [accounts, accountId, defaultAccountId]);
 
   const filteredCategories = categories.filter((c) => {
     if (recordType === "transfer") return true;
@@ -417,19 +556,14 @@ function RecordForm({
 
   const suggestions = (() => {
     if (!note.trim()) return [];
-    const q = note.toLowerCase();
     const seen = new Set<string>();
     const results: WalletRecord[] = [];
-    for (const r of records) {
+    for (const r of apiSuggestions) {
       if (mode === "edit" && r.id === initialRecord?.id) continue;
-      const noteText = (r.note ?? "").toLowerCase();
-      const payeeText = (r.counterParty ?? "").toLowerCase();
-      if (!noteText.includes(q) && !payeeText.includes(q)) continue;
       const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(r);
-      if (results.length >= 8) break;
     }
     return results;
   })();
@@ -468,26 +602,22 @@ function RecordForm({
     setRecordDate(d);
   }
 
-  async function submit(addAnother: boolean | "sameDate") {
-    if (amount === undefined || !accountId) return;
-    setSubmitting(true);
-    setError("");
+  const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
+    mutationFn: async (addAnother: boolean | "sameDate") => {
+      if (amount === undefined || !accountId) throw new Error("Missing required fields");
+      const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
+      const payload: Record<string, unknown> = {
+        accountId,
+        note: note || undefined,
+        counterParty: payer || undefined,
+        amount: { value: signedAmount, currencyCode },
+        recordDate: recordDate.toISOString(),
+        paymentType,
+        recordState,
+      };
+      if (categoryId) payload.categoryId = categoryId;
+      if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
-    const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-
-    const payload: Record<string, unknown> = {
-      accountId,
-      note: note || undefined,
-      counterParty: payer || undefined,
-      amount: { value: signedAmount, currencyCode },
-      recordDate: recordDate.toISOString(),
-      paymentType,
-      recordState,
-    };
-    if (categoryId) payload.categoryId = categoryId;
-    if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
-
-    try {
       let res: Response;
       if (mode === "edit" && initialRecord) {
         res = await fetch(`/api/wallet/records/${initialRecord.id}`, {
@@ -509,20 +639,25 @@ function RecordForm({
         throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
+      return addAnother;
+    },
+    onSuccess: (addAnother) => {
       if (addAnother === "sameDate") {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
-        // recordDate is intentionally preserved
       } else if (addAnother) {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
         setRecordDate(new Date());
       } else {
         onSuccess();
       }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to save record");
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const error = submitError instanceof Error ? submitError.message : "";
+
+  function submit(addAnother: boolean | "sameDate") {
+    resetSubmitError();
+    runSubmit(addAnother);
   }
 
   return (

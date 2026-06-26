@@ -357,6 +357,15 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
   );
 }
 
+function periodFrom(period: "3m" | "6m" | "1y" | "all") {
+  if (period === "all") return "2000-01-01";
+  const d = new Date();
+  if (period === "3m") d.setMonth(d.getMonth() - 3);
+  else if (period === "6m") d.setMonth(d.getMonth() - 6);
+  else if (period === "1y") d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().split("T")[0];
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -371,6 +380,12 @@ export default function Home() {
   const [selectedAccount, setSelectedAccount] = useState("all");
   const selectedAccountRef = useRef("all");
   selectedAccountRef.current = selectedAccount;
+  const [period, setPeriod] = useState<"3m" | "6m" | "1y" | "all">("3m");
+  const periodRef = useRef<"3m" | "6m" | "1y" | "all">("3m");
+  periodRef.current = period;
+  const [page, setPage] = useState(0);
+  const [nextPageOffset, setNextPageOffset] = useState<number | null>(null);
+  const [pageOffsets, setPageOffsets] = useState<number[]>([0]);
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
@@ -381,25 +396,45 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const periodChangedRef = useRef(false);
+  useEffect(() => {
+    if (!periodChangedRef.current) { periodChangedRef.current = true; return; }
+    if (!token) return;
+    setPage(0);
+    setRecordsLoading(true);
+    const from = periodFrom(period);
+    const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
+    fetchRecords(token, { accountId, from, offset: 0, limit: 200 })
+      .then(({ records: recs, nextOffset }) => {
+        setRecords(recs);
+        setNextPageOffset(nextOffset);
+        setPageOffsets([0]);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to fetch records"))
+      .finally(() => setRecordsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
+
   const loadData = useCallback(async (t: string, keepAccount?: string) => {
     if (!t) return;
     setLoading(true);
     setError("");
     try {
-      const [accts, allRecs, apiStats] = await Promise.all([
+      const from = periodFrom(periodRef.current);
+      const [accts, { records: allRecs }, apiStats] = await Promise.all([
         fetchAccounts(t),
-        fetchRecords(t),
+        fetchRecords(t, { limit: 200 }),
         fetchApiStats(t),
       ]);
       setAccounts(accts);
       setAllRecords(allRecs);
-      if (keepAccount && keepAccount !== "all") {
-        const filteredRecs = await fetchRecords(t, keepAccount);
-        setRecords(filteredRecs);
-      } else {
-        setRecords(allRecs);
-        setSelectedAccount("all");
-      }
+      const accountId = keepAccount && keepAccount !== "all" ? keepAccount : undefined;
+      const { records: recs, nextOffset } = await fetchRecords(t, { accountId, from, offset: 0, limit: 200 });
+      setRecords(recs);
+      setNextPageOffset(nextOffset);
+      setPageOffsets([0]);
+      setPage(0);
+      if (!keepAccount || keepAccount === "all") setSelectedAccount("all");
       setStats(apiStats);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch data");
@@ -410,20 +445,22 @@ export default function Home() {
 
   const handleAccountSelect = useCallback(async (accountId: string) => {
     setSelectedAccount(accountId);
-    if (accountId === "all") {
-      setRecords(allRecords);
-      return;
-    }
+    setPage(0);
     setRecordsLoading(true);
     try {
-      const recs = await fetchRecords(token, accountId);
+      const from = periodFrom(periodRef.current);
+      const { records: recs, nextOffset } = await fetchRecords(
+        token, { accountId: accountId === "all" ? undefined : accountId, from, offset: 0, limit: 200 }
+      );
       setRecords(recs);
+      setNextPageOffset(nextOffset);
+      setPageOffsets([0]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch records");
     } finally {
       setRecordsLoading(false);
     }
-  }, [token, allRecords]);
+  }, [token]);
 
   function handleSave(t: string) {
     localStorage.setItem("wallet_token", t);
@@ -451,6 +488,26 @@ export default function Home() {
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
     setTimeout(() => setHighlightedId(undefined), 2500);
+  }
+
+  async function goToPage(newPage: number) {
+    const goingForward = newPage > page;
+    const offset = goingForward ? nextPageOffset! : pageOffsets[newPage];
+    setPage(newPage);
+    setRecordsLoading(true);
+    recordsSectionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      const from = periodFrom(periodRef.current);
+      const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
+      const { records: recs, nextOffset } = await fetchRecords(token, { accountId, from, offset, limit: 200 });
+      setRecords(recs);
+      setNextPageOffset(nextOffset);
+      if (goingForward) setPageOffsets(prev => [...prev.slice(0, newPage), offset]);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to fetch records");
+    } finally {
+      setRecordsLoading(false);
+    }
   }
 
   const sorted = (list: WalletRecord[]) =>
@@ -643,10 +700,28 @@ export default function Home() {
                   <p className="text-xs text-muted mt-0.5">
                     {recordsLoading
                       ? "Loading…"
-                      : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · last 3 months`}
+                      : `${displayedRecords.length} record${displayedRecords.length !== 1 ? "s" : ""} · ${
+                          period === "3m" ? "last 3 months"
+                          : period === "6m" ? "last 6 months"
+                          : period === "1y" ? "last year"
+                          : "all time"
+                        }`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-0.5 rounded-full bg-white/[0.06] p-0.5">
+                    {(["3m", "6m", "1y", "all"] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPeriod(p)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          period === p ? "bg-white/[0.12] text-foreground" : "text-muted hover:text-foreground"
+                        }`}
+                      >
+                        {p === "3m" ? "3M" : p === "6m" ? "6M" : p === "1y" ? "1Y" : "All"}
+                      </button>
+                    ))}
+                  </div>
                   {token && (
                     <AddRecordButton
                       token={token}
@@ -697,6 +772,25 @@ export default function Home() {
                 </div>
               ) : (
                 <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
+              )}
+              {!recordsLoading && (page > 0 || nextPageOffset !== null) && (
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    onClick={() => goToPage(page - 1)}
+                    disabled={page === 0}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← Previous
+                  </button>
+                  <span className="text-xs text-muted">Page {page + 1}</span>
+                  <button
+                    onClick={() => goToPage(page + 1)}
+                    disabled={nextPageOffset === null}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next →
+                  </button>
+                </div>
               )}
             </div>
           ) : null}

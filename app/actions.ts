@@ -20,16 +20,24 @@ export async function fetchAccounts(token: string) {
   return all;
 }
 
-export async function fetchRecords(token: string, accountId?: string) {
-  const params = new URLSearchParams({ limit: "200" });
+export async function fetchRecords(
+  token: string,
+  opts: { accountId?: string; from?: string; offset?: number; limit?: number } = {}
+): Promise<{ records: WalletRecord[]; nextOffset: number | null }> {
+  const { accountId, from, offset = 0, limit = 200 } = opts;
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (accountId) params.set("accountId", accountId);
+  if (from) params.set("recordDate", `gte.${from}`);
   const res = await fetch(`${BASE}/records?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Records: ${res.status}`);
   const data = await res.json();
-  return (data.records ?? data) as WalletRecord[];
+  return {
+    records: (data.records ?? data) as WalletRecord[],
+    nextOffset: data.nextOffset ?? null,
+  };
 }
 
 export async function fetchApiStats(token: string): Promise<ApiStats> {

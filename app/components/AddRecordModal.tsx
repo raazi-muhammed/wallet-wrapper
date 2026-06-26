@@ -382,7 +382,7 @@ function RecordForm({
 
   const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
-  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
@@ -406,8 +406,8 @@ function RecordForm({
   }, [token]);
 
   useEffect(() => {
-    if (accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
-  }, [accounts, accountId]);
+    if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
+  }, [accounts, accountId, defaultAccountId]);
 
   const filteredCategories = categories.filter((c) => {
     if (recordType === "transfer") return true;

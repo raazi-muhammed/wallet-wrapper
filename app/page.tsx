@@ -383,9 +383,11 @@ export default function Home() {
   const [period, setPeriod] = useState<"3m" | "6m" | "1y" | "all">("3m");
   const periodRef = useRef<"3m" | "6m" | "1y" | "all">("3m");
   periodRef.current = period;
-  const [page, setPage] = useState(0);
-  const [nextPageOffset, setNextPageOffset] = useState<number | null>(null);
-  const [pageOffsets, setPageOffsets] = useState<number[]>([0]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const nextPageOffsetRef = useRef<number | null>(null);
+  const loadingMoreRef = useRef(false);
+  loadingMoreRef.current = loadingMore;
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
@@ -400,15 +402,13 @@ export default function Home() {
   useEffect(() => {
     if (!periodChangedRef.current) { periodChangedRef.current = true; return; }
     if (!token) return;
-    setPage(0);
     setRecordsLoading(true);
     const from = periodFrom(period);
     const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
     fetchRecords(token, { accountId, from, offset: 0, limit: 200 })
       .then(({ records: recs, nextOffset }) => {
         setRecords(recs);
-        setNextPageOffset(nextOffset);
-        setPageOffsets([0]);
+        nextPageOffsetRef.current = nextOffset;
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to fetch records"))
       .finally(() => setRecordsLoading(false));
@@ -431,9 +431,7 @@ export default function Home() {
       const accountId = keepAccount && keepAccount !== "all" ? keepAccount : undefined;
       const { records: recs, nextOffset } = await fetchRecords(t, { accountId, from, offset: 0, limit: 200 });
       setRecords(recs);
-      setNextPageOffset(nextOffset);
-      setPageOffsets([0]);
-      setPage(0);
+      nextPageOffsetRef.current = nextOffset;
       if (!keepAccount || keepAccount === "all") setSelectedAccount("all");
       setStats(apiStats);
     } catch (e: unknown) {
@@ -445,7 +443,6 @@ export default function Home() {
 
   const handleAccountSelect = useCallback(async (accountId: string) => {
     setSelectedAccount(accountId);
-    setPage(0);
     setRecordsLoading(true);
     try {
       const from = periodFrom(periodRef.current);
@@ -453,8 +450,7 @@ export default function Home() {
         token, { accountId: accountId === "all" ? undefined : accountId, from, offset: 0, limit: 200 }
       );
       setRecords(recs);
-      setNextPageOffset(nextOffset);
-      setPageOffsets([0]);
+      nextPageOffsetRef.current = nextOffset;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch records");
     } finally {
@@ -490,25 +486,40 @@ export default function Home() {
     setTimeout(() => setHighlightedId(undefined), 2500);
   }
 
-  async function goToPage(newPage: number) {
-    const goingForward = newPage > page;
-    const offset = goingForward ? nextPageOffset! : pageOffsets[newPage];
-    setPage(newPage);
-    setRecordsLoading(true);
-    recordsSectionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  const loadMore = useCallback(async () => {
+    if (nextPageOffsetRef.current === null || loadingMoreRef.current) return;
+    setLoadingMore(true);
+    loadingMoreRef.current = true;
     try {
       const from = periodFrom(periodRef.current);
       const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
-      const { records: recs, nextOffset } = await fetchRecords(token, { accountId, from, offset, limit: 200 });
-      setRecords(recs);
-      setNextPageOffset(nextOffset);
-      if (goingForward) setPageOffsets(prev => [...prev.slice(0, newPage), offset]);
+      const offset = nextPageOffsetRef.current;
+      const { records: newRecs, nextOffset } = await fetchRecords(
+        token, { accountId, from, offset, limit: 200 }
+      );
+      setRecords(prev => [...prev, ...newRecs]);
+      nextPageOffsetRef.current = nextOffset;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch records");
     } finally {
-      setRecordsLoading(false);
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
-  }
+  }, [token]);
+
+  const loadMoreRef = useRef(loadMore);
+  loadMoreRef.current = loadMore;
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreRef.current(); },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
 
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
@@ -773,24 +784,13 @@ export default function Home() {
               ) : (
                 <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
               )}
-              {!recordsLoading && (page > 0 || nextPageOffset !== null) && (
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    onClick={() => goToPage(page - 1)}
-                    disabled={page === 0}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    ← Previous
-                  </button>
-                  <span className="text-xs text-muted">Page {page + 1}</span>
-                  <button
-                    onClick={() => goToPage(page + 1)}
-                    disabled={nextPageOffset === null}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next →
-                  </button>
-                </div>
+              {!recordsLoading && (
+                <>
+                  {loadingMore && (
+                    <p className="py-4 text-center text-xs text-muted animate-pulse">Loading more…</p>
+                  )}
+                  <div ref={sentinelRef} className="h-1" />
+                </>
               )}
             </div>
           ) : null}

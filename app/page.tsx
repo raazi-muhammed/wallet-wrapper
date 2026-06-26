@@ -665,7 +665,39 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
+              {recordsLoading ? (
+                <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+                  {([4, 3] as const).map((count, gi) => (
+                    <div key={gi}>
+                      <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3 w-14" />
+                      </div>
+                      {[...Array(count)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
+                          <Skeleton className="size-9 rounded-full shrink-0" />
+                          <div className="w-40 shrink-0 space-y-1.5">
+                            <Skeleton className="h-3.5 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                          </div>
+                          <div className="w-36 shrink-0">
+                            <Skeleton className="h-3.5 w-4/5" />
+                          </div>
+                          <div className="flex-1">
+                            <Skeleton className="h-3.5 w-2/3" />
+                          </div>
+                          <div className="shrink-0 space-y-1.5 text-right">
+                            <Skeleton className="h-3.5 w-16 ml-auto" />
+                            <Skeleton className="h-3 w-10 ml-auto" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
+              )}
             </div>
           ) : null}
         </main>

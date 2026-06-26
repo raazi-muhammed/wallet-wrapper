@@ -512,10 +512,11 @@ export default function Home() {
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    const root = recordsSectionRef.current;
+    if (!sentinel || !root) return;
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreRef.current(); },
-      { rootMargin: "200px" }
+      { root, rootMargin: "200px" }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();

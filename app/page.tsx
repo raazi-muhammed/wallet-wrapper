@@ -384,10 +384,10 @@ export default function Home() {
   const periodRef = useRef<"3m" | "6m" | "1y" | "all">("3m");
   periodRef.current = period;
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const nextPageOffsetRef = useRef<number | null>(null);
   const loadingMoreRef = useRef(false);
   loadingMoreRef.current = loadingMore;
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const recordsSectionRef = useRef<HTMLElement>(null);
@@ -408,7 +408,7 @@ export default function Home() {
     fetchRecords(token, { accountId, from, offset: 0, limit: 200 })
       .then(({ records: recs, nextOffset }) => {
         setRecords(recs);
-        nextPageOffsetRef.current = nextOffset;
+        nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to fetch records"))
       .finally(() => setRecordsLoading(false));
@@ -431,7 +431,7 @@ export default function Home() {
       const accountId = keepAccount && keepAccount !== "all" ? keepAccount : undefined;
       const { records: recs, nextOffset } = await fetchRecords(t, { accountId, from, offset: 0, limit: 200 });
       setRecords(recs);
-      nextPageOffsetRef.current = nextOffset;
+      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
       if (!keepAccount || keepAccount === "all") setSelectedAccount("all");
       setStats(apiStats);
     } catch (e: unknown) {
@@ -450,7 +450,7 @@ export default function Home() {
         token, { accountId: accountId === "all" ? undefined : accountId, from, offset: 0, limit: 200 }
       );
       setRecords(recs);
-      nextPageOffsetRef.current = nextOffset;
+      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch records");
     } finally {
@@ -498,7 +498,7 @@ export default function Home() {
         token, { accountId, from, offset, limit: 200 }
       );
       setRecords(prev => [...prev, ...newRecs]);
-      nextPageOffsetRef.current = nextOffset;
+      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch records");
     } finally {
@@ -510,17 +510,6 @@ export default function Home() {
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const root = recordsSectionRef.current;
-    if (!sentinel || !root) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMoreRef.current(); },
-      { root, rootMargin: "200px" }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
 
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
@@ -785,13 +774,16 @@ export default function Home() {
               ) : (
                 <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
               )}
-              {!recordsLoading && (
-                <>
-                  {loadingMore && (
-                    <p className="py-4 text-center text-xs text-muted animate-pulse">Loading more…</p>
-                  )}
-                  <div ref={sentinelRef} className="h-1" />
-                </>
+              {!recordsLoading && hasMore && (
+                <div className="flex justify-center pt-2 pb-1">
+                  <button
+                    onClick={() => loadMore()}
+                    disabled={loadingMore}
+                    className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </button>
+                </div>
               )}
             </div>
           ) : null}

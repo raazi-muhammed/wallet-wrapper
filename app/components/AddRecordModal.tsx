@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -503,47 +504,45 @@ function RecordForm({
   const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
   const [recordDate, setRecordDate] = useState<Date>(() => new Date());
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [apiSuggestions, setApiSuggestions] = useState<WalletRecord[]>([]);
+  const [debouncedNote, setDebouncedNote] = useState(note);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suggestionAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
 
+  // Debounce note for suggestions query
   useEffect(() => {
-    if (!token) return;
-    fetchCategories(token).then(setCategories).catch(() => {});
-  }, [token]);
+    const t = setTimeout(() => setDebouncedNote(note), 300);
+    return () => clearTimeout(t);
+  }, [note]);
 
-  useEffect(() => {
-    if (suggestionAbortRef.current) clearTimeout(suggestionAbortRef.current);
-    setApiSuggestions([]);
-    if (!note.trim() || !token) return;
-    let cancelled = false;
-    const q = note.trim();
-    suggestionAbortRef.current = setTimeout(() => {
-      Promise.all([
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories", token],
+    queryFn: () => fetchCategories(token),
+    enabled: !!token,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: apiSuggestions = [] } = useQuery({
+    queryKey: ["noteSuggestions", token, debouncedNote],
+    queryFn: async () => {
+      const q = debouncedNote.trim();
+      const [noteRes, cpRes] = await Promise.all([
         fetchRecords(token, { from: "2000-01-01", limit: 10, note: q }),
         fetchRecords(token, { from: "2000-01-01", limit: 10, counterParty: q }),
-      ]).then(([noteRes, cpRes]) => {
-        if (cancelled) return;
-        const seen = new Set<string>();
-        const merged: WalletRecord[] = [];
-        for (const r of [...noteRes.records, ...cpRes.records]) {
-          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
-        }
-        setApiSuggestions(merged.slice(0, 10));
-      }).catch(() => {});
-    }, 300);
-    return () => {
-      cancelled = true;
-      if (suggestionAbortRef.current) clearTimeout(suggestionAbortRef.current);
-    };
-  }, [note, token]);
+      ]);
+      const seen = new Set<string>();
+      const merged: WalletRecord[] = [];
+      for (const r of [...noteRes.records, ...cpRes.records]) {
+        if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+      }
+      return merged.slice(0, 10);
+    },
+    enabled: !!token && debouncedNote.trim().length > 0,
+    staleTime: 30_000,
+    placeholderData: [] as WalletRecord[],
+  });
 
   useEffect(() => {
     if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
@@ -603,26 +602,22 @@ function RecordForm({
     setRecordDate(d);
   }
 
-  async function submit(addAnother: boolean | "sameDate") {
-    if (amount === undefined || !accountId) return;
-    setSubmitting(true);
-    setError("");
+  const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
+    mutationFn: async (addAnother: boolean | "sameDate") => {
+      if (amount === undefined || !accountId) throw new Error("Missing required fields");
+      const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
+      const payload: Record<string, unknown> = {
+        accountId,
+        note: note || undefined,
+        counterParty: payer || undefined,
+        amount: { value: signedAmount, currencyCode },
+        recordDate: recordDate.toISOString(),
+        paymentType,
+        recordState,
+      };
+      if (categoryId) payload.categoryId = categoryId;
+      if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
-    const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-
-    const payload: Record<string, unknown> = {
-      accountId,
-      note: note || undefined,
-      counterParty: payer || undefined,
-      amount: { value: signedAmount, currencyCode },
-      recordDate: recordDate.toISOString(),
-      paymentType,
-      recordState,
-    };
-    if (categoryId) payload.categoryId = categoryId;
-    if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
-
-    try {
       let res: Response;
       if (mode === "edit" && initialRecord) {
         res = await fetch(`/api/wallet/records/${initialRecord.id}`, {
@@ -644,20 +639,25 @@ function RecordForm({
         throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
+      return addAnother;
+    },
+    onSuccess: (addAnother) => {
       if (addAnother === "sameDate") {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
-        // recordDate is intentionally preserved
       } else if (addAnother) {
         setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
         setRecordDate(new Date());
       } else {
         onSuccess();
       }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to save record");
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const error = submitError instanceof Error ? submitError.message : "";
+
+  function submit(addAnother: boolean | "sameDate") {
+    resetSubmitError();
+    runSubmit(addAnother);
   }
 
   return (

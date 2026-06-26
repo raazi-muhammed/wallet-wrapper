@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Wallet,
   Banknote,
@@ -230,9 +231,6 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
   );
 }
 
-// ── Sidebar Account Item ──────────────────────────────────────────────────────
-
-
 // ── Records Table ─────────────────────────────────────────────────────────────
 
 const ICON_BG_COLORS = [
@@ -245,7 +243,6 @@ const ICON_BG_COLORS = [
   "bg-teal-500/20 text-teal-400",
   "bg-indigo-500/20 text-indigo-400",
 ];
-
 
 function hashStr(s: string) {
   let h = 0;
@@ -285,14 +282,12 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
           <div key={date}>
-            {/* Date header */}
             <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
               </span>
             </div>
-            {/* Records */}
             {dayRecords.map((r) => {
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
@@ -311,7 +306,6 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   onClick={() => onEdit?.(r)}
                   className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
-                  {/* Category icon */}
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
                       <Icon className="size-4" />
@@ -325,24 +319,20 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                     )}
                   </div>
 
-                  {/* Category + payee */}
                   <div className="min-w-0 w-40 shrink-0">
                     <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
                     {r.counterParty && <p className="text-xs text-muted truncate">{r.counterParty}</p>}
                   </div>
 
-                  {/* Account */}
                   <div className="flex items-center gap-1.5 min-w-0 w-36 shrink-0">
                     <AccountIcon weight="fill" className="size-3.5 shrink-0" style={{ color: accountColor }} />
                     <span className="text-sm text-muted truncate">{r.accountName}</span>
                   </div>
 
-                  {/* Note */}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm text-muted truncate block">{r.note ?? ""}</span>
                   </div>
 
-                  {/* Amount + time */}
                   <div className="shrink-0 text-right">
                     <p className={`text-sm font-semibold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
                       {positive ? "+" : ""}{fmt(value, currencyCode)}
@@ -368,28 +358,51 @@ function periodFrom(period: "3m" | "6m" | "1y" | "all") {
   return d.toISOString().split("T")[0];
 }
 
+// ── Skeleton rows ─────────────────────────────────────────────────────────────
+
+function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+      {counts.map((count, gi) => (
+        <div key={gi}>
+          <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-14" />
+          </div>
+          {[...Array(count)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
+              <Skeleton className="size-9 rounded-full shrink-0" />
+              <div className="w-40 shrink-0 space-y-1.5">
+                <Skeleton className="h-3.5 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+              <div className="w-36 shrink-0">
+                <Skeleton className="h-3.5 w-4/5" />
+              </div>
+              <div className="flex-1">
+                <Skeleton className="h-3.5 w-2/3" />
+              </div>
+              <div className="shrink-0 space-y-1.5 text-right">
+                <Skeleton className="h-3.5 w-16 ml-auto" />
+                <Skeleton className="h-3 w-10 ml-auto" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const queryClient = useQueryClient();
   const [token, setToken] = useState("");
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [records, setRecords] = useState<WalletRecord[]>([]);
-  const [allRecords, setAllRecords] = useState<WalletRecord[]>([]);
-  const [stats, setStats] = useState<ApiStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
-  const selectedAccountRef = useRef("all");
-  selectedAccountRef.current = selectedAccount;
   const [period, setPeriod] = useState<"3m" | "6m" | "1y" | "all">("3m");
-  const periodRef = useRef<"3m" | "6m" | "1y" | "all">("3m");
-  periodRef.current = period;
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const nextPageOffsetRef = useRef<number | null>(null);
-  const loadingMoreRef = useRef(false);
-  loadingMoreRef.current = loadingMore;
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
@@ -397,167 +410,137 @@ export default function Home() {
 
   useEffect(() => {
     const t = localStorage.getItem("wallet_token") ?? "";
-    if (t) { setToken(t); loadData(t); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (t) setToken(t);
   }, []);
 
-  const periodChangedRef = useRef(false);
+  // Debounce search input
   useEffect(() => {
-    if (!periodChangedRef.current) { periodChangedRef.current = true; return; }
-    if (!token) return;
-    setRecordsLoading(true);
-    const from = periodFrom(period);
-    const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
-    fetchRecords(token, { accountId, from, offset: 0, limit: 200 })
-      .then(({ records: recs, nextOffset }) => {
-        setRecords(recs);
-        nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to fetch records"))
-      .finally(() => setRecordsLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const loadData = useCallback(async (t: string, keepAccount?: string) => {
-    if (!t) return;
-    setLoading(true);
-    setError("");
-    try {
-      const from = periodFrom(periodRef.current);
-      const [accts, { records: allRecs }, apiStats] = await Promise.all([
-        fetchAccounts(t),
-        fetchRecords(t, { limit: 200 }),
-        fetchApiStats(t),
+  // ── Queries ─────────────────────────────────────────────────────────────────
+
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+    queryKey: ["accounts", token],
+    queryFn: () => fetchAccounts(token),
+    enabled: !!token,
+  });
+
+  const { data: allRecords = [] } = useQuery({
+    queryKey: ["allRecords", token],
+    queryFn: async () => {
+      const { records } = await fetchRecords(token, { limit: 200 });
+      return records;
+    },
+    enabled: !!token,
+  });
+
+  const { data: stats = null } = useQuery({
+    queryKey: ["stats", token],
+    queryFn: () => fetchApiStats(token),
+    enabled: !!token,
+  });
+
+  const accountId = selectedAccount === "all" ? undefined : selectedAccount;
+
+  const {
+    data: recordsData,
+    isLoading: recordsInitialLoading,
+    isFetching: recordsFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["records", token, accountId, period],
+    queryFn: ({ pageParam }) =>
+      fetchRecords(token, {
+        accountId,
+        from: periodFrom(period),
+        offset: pageParam as number,
+        limit: 200,
+      }),
+    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
+    initialPageParam: 0,
+    enabled: !!token,
+  });
+
+  const isSearching = debouncedSearch.trim().length > 0;
+
+  const { data: searchResults = [], isFetching: searchFetching } = useQuery({
+    queryKey: ["search", token, debouncedSearch],
+    queryFn: async () => {
+      const [noteRes, cpRes] = await Promise.all([
+        fetchRecords(token, { from: "2000-01-01", limit: 200, note: debouncedSearch }),
+        fetchRecords(token, { from: "2000-01-01", limit: 200, counterParty: debouncedSearch }),
       ]);
-      setAccounts(accts);
-      setAllRecords(allRecs);
-      const accountId = keepAccount && keepAccount !== "all" ? keepAccount : undefined;
-      const { records: recs, nextOffset } = await fetchRecords(t, { accountId, from, offset: 0, limit: 200 });
-      setRecords(recs);
-      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
-      if (!keepAccount || keepAccount === "all") setSelectedAccount("all");
-      setStats(apiStats);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to fetch data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      const seen = new Set<string>();
+      const merged: WalletRecord[] = [];
+      for (const r of [...noteRes.records, ...cpRes.records]) {
+        if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+      }
+      return merged;
+    },
+    enabled: !!token && isSearching,
+    staleTime: 30_000,
+  });
 
-  const handleAccountSelect = useCallback(async (accountId: string) => {
-    setSelectedAccount(accountId);
-    setRecordsLoading(true);
-    try {
-      const from = periodFrom(periodRef.current);
-      const { records: recs, nextOffset } = await fetchRecords(
-        token, { accountId: accountId === "all" ? undefined : accountId, from, offset: 0, limit: 200 }
-      );
-      setRecords(recs);
-      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to fetch records");
-    } finally {
-      setRecordsLoading(false);
-    }
-  }, [token]);
+  // ── Invalidation helper ──────────────────────────────────────────────────────
+
+  function invalidateAll() {
+    queryClient.invalidateQueries({ queryKey: ["records", token] });
+    queryClient.invalidateQueries({ queryKey: ["allRecords", token] });
+    queryClient.invalidateQueries({ queryKey: ["accounts", token] });
+    queryClient.invalidateQueries({ queryKey: ["stats", token] });
+  }
+
+  // ── Auth handlers ────────────────────────────────────────────────────────────
 
   function handleSave(t: string) {
     localStorage.setItem("wallet_token", t);
     setToken(t);
-    loadData(t);
   }
 
   function handleDisconnect() {
     localStorage.removeItem("wallet_token");
     setToken("");
-    setAccounts([]);
-    setRecords([]);
-    setStats(null);
-    setError("");
+    setSelectedAccount("all");
+    queryClient.clear();
   }
 
-  async function handleGoToRecord(id: string) {
+  // ── Navigation ───────────────────────────────────────────────────────────────
+
+  function handleGoToRecord(id: string) {
     const rec = allRecords.find((r) => r.id === id);
     if (rec && rec.accountId !== selectedAccount) {
-      await handleAccountSelect(rec.accountId);
+      setSelectedAccount(rec.accountId);
     }
     setHighlightedId(id);
     setTimeout(() => {
-      const el = document.querySelector(`[data-record-id="${id}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.querySelector(`[data-record-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
     setTimeout(() => setHighlightedId(undefined), 2500);
   }
 
-  const loadMore = useCallback(async () => {
-    if (nextPageOffsetRef.current === null || loadingMoreRef.current) return;
-    setLoadingMore(true);
-    loadingMoreRef.current = true;
-    try {
-      const from = periodFrom(periodRef.current);
-      const accountId = selectedAccountRef.current === "all" ? undefined : selectedAccountRef.current;
-      const offset = nextPageOffsetRef.current;
-      const { records: newRecs, nextOffset } = await fetchRecords(
-        token, { accountId, from, offset, limit: 200 }
-      );
-      setRecords(prev => [...prev, ...newRecs]);
-      nextPageOffsetRef.current = nextOffset; setHasMore(nextOffset !== null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to fetch records");
-    } finally {
-      setLoadingMore(false);
-      loadingMoreRef.current = false;
-    }
-  }, [token]);
+  // ── Derived state ────────────────────────────────────────────────────────────
 
-  const loadMoreRef = useRef(loadMore);
-  loadMoreRef.current = loadMore;
-
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<WalletRecord[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (searchAbortRef.current) clearTimeout(searchAbortRef.current);
-    setSearchResults([]);
-    if (!search.trim() || !token) { setSearchLoading(false); return; }
-    let cancelled = false;
-    const q = search.trim();
-    setSearchLoading(true);
-    searchAbortRef.current = setTimeout(() => {
-      Promise.all([
-        fetchRecords(token, { from: "2000-01-01", limit: 200, note: q }),
-        fetchRecords(token, { from: "2000-01-01", limit: 200, counterParty: q }),
-      ]).then(([noteRes, cpRes]) => {
-        if (cancelled) return;
-        const seen = new Set<string>();
-        const merged: WalletRecord[] = [];
-        for (const r of [...noteRes.records, ...cpRes.records]) {
-          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
-        }
-        setSearchResults(merged);
-      }).catch(() => {}).finally(() => { if (!cancelled) setSearchLoading(false); });
-    }, 300);
-    return () => { cancelled = true; if (searchAbortRef.current) clearTimeout(searchAbortRef.current); };
-  }, [search, token]);
-
+  const records = recordsData?.pages.flatMap((p) => p.records) ?? [];
   const sorted = (list: WalletRecord[]) =>
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
-
-  const isSearching = search.trim().length > 0;
   const displayedRecords = sorted(isSearching ? searchResults : records);
   const activeAccounts = accounts.filter((a) => !a.archived);
-
   const selectedAccountName =
     selectedAccount === "all"
       ? "All Accounts"
       : activeAccounts.find((a) => a.id === selectedAccount)?.name ?? "Records";
 
+  const initialLoading = !!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0;
+  const recordsSwitching = !recordsInitialLoading && recordsFetching && !isFetchingNextPage && !isSearching;
+
   return (
     <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
       {/* Sidebar */}
-      {token && loading && activeAccounts.length === 0 ? (
+      {initialLoading ? (
         <Sidebar variant="floating">
           <SidebarHeader className="px-4 pt-4 pb-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
@@ -610,7 +593,7 @@ export default function Home() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={selectedAccount === "all"}
-                      onClick={() => handleAccountSelect("all")}
+                      onClick={() => setSelectedAccount("all")}
                       size="lg"
                       className="justify-between"
                     >
@@ -631,14 +614,14 @@ export default function Home() {
                 map.get(type)!.push(a);
                 return map;
               }, new Map<string, typeof activeAccounts>())
-            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accounts]) => (
+            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => (
               <SidebarGroup key={type} className="pt-0">
                 <SidebarGroupLabel className="text-[10px] uppercase tracking-widest px-2">
                   {type.replace(/([A-Z])/g, " $1").trim()}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {accounts.map((a) => {
+                    {accs.map((a) => {
                       const count = allRecords.filter((r) => r.accountId === a.id).length;
                       const Icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
@@ -646,7 +629,7 @@ export default function Home() {
                         <SidebarMenuItem key={a.id}>
                           <SidebarMenuButton
                             isActive={selectedAccount === a.id}
-                            onClick={() => handleAccountSelect(a.id)}
+                            onClick={() => setSelectedAccount(a.id)}
                             size="lg"
                             className="justify-between h-auto py-2"
                           >
@@ -675,15 +658,10 @@ export default function Home() {
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
-          {error && (
-            <div className="mx-6 mt-6 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
-              {error}
-            </div>
-          )}
 
           {!token && <TokenConnectForm onSave={handleSave} />}
 
-          {token && loading && activeAccounts.length === 0 && records.length === 0 ? (
+          {token && initialLoading ? (
             <div className="px-6 py-6 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1.5">
@@ -695,35 +673,7 @@ export default function Home() {
                   <Skeleton className="size-8 rounded-full" />
                 </div>
               </div>
-              <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
-                {([3, 2, 4] as const).map((count, gi) => (
-                  <div key={gi}>
-                    <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-3 w-14" />
-                    </div>
-                    {[...Array(count)].map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
-                        <Skeleton className="size-9 rounded-full shrink-0" />
-                        <div className="w-40 shrink-0 space-y-1.5">
-                          <Skeleton className="h-3.5 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                        </div>
-                        <div className="w-36 shrink-0">
-                          <Skeleton className="h-3.5 w-4/5" />
-                        </div>
-                        <div className="flex-1">
-                          <Skeleton className="h-3.5 w-2/3" />
-                        </div>
-                        <div className="shrink-0 space-y-1.5 text-right">
-                          <Skeleton className="h-3.5 w-16 ml-auto" />
-                          <Skeleton className="h-3 w-10 ml-auto" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <RecordsSkeleton counts={[3, 2, 4]} />
             </div>
           ) : (activeAccounts.length > 0 || records.length > 0) ? (
             <div className="px-6 py-6 space-y-4">
@@ -732,25 +682,25 @@ export default function Home() {
                   <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
                   {isSearching && (
                     <p className="text-xs text-muted mt-0.5">
-                      {searchLoading ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${search}"`}
+                      {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"`}
                     </p>
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {!isSearching && (
-                  <div className="flex items-center gap-0.5 rounded-full bg-white/[0.06] p-0.5">
-                    {(["3m", "6m", "1y", "all"] as const).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setPeriod(p)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                          period === p ? "bg-white/[0.12] text-foreground" : "text-muted hover:text-foreground"
-                        }`}
-                      >
-                        {p === "3m" ? "3M" : p === "6m" ? "6M" : p === "1y" ? "1Y" : "All"}
-                      </button>
-                    ))}
-                  </div>
+                    <div className="flex items-center gap-0.5 rounded-full bg-white/[0.06] p-0.5">
+                      {(["3m", "6m", "1y", "all"] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setPeriod(p)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                            period === p ? "bg-white/[0.12] text-foreground" : "text-muted hover:text-foreground"
+                          }`}
+                        >
+                          {p === "3m" ? "3M" : p === "6m" ? "6M" : p === "1y" ? "1Y" : "All"}
+                        </button>
+                      ))}
+                    </div>
                   )}
                   {token && (
                     <AddRecordButton
@@ -758,7 +708,7 @@ export default function Home() {
                       accounts={activeAccounts}
                       records={allRecords}
                       defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
-                      onSuccess={() => loadData(token, selectedAccountRef.current)}
+                      onSuccess={invalidateAll}
                       onGoToRecord={handleGoToRecord}
                     />
                   )}
@@ -770,63 +720,43 @@ export default function Home() {
                   />
                 </div>
               </div>
+
               {/* Search bar */}
               <div className="relative flex items-center">
                 <Search className="absolute left-3 size-3.5 text-muted pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search by note or payee…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-white/[0.05] text-foreground placeholder:text-muted focus:outline-none focus:bg-white/[0.09] transition-colors"
                 />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-3 text-muted hover:text-foreground">
+                {searchInput && (
+                  <button onClick={() => { setSearchInput(""); setDebouncedSearch(""); }} className="absolute right-3 text-muted hover:text-foreground">
                     <X className="size-3.5" />
                   </button>
                 )}
               </div>
-              {recordsLoading && !isSearching ? (
-                <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
-                  {([4, 3] as const).map((count, gi) => (
-                    <div key={gi}>
-                      <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
-                        <Skeleton className="h-3 w-24" />
-                        <Skeleton className="h-3 w-14" />
-                      </div>
-                      {[...Array(count)].map((_, i) => (
-                        <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
-                          <Skeleton className="size-9 rounded-full shrink-0" />
-                          <div className="w-40 shrink-0 space-y-1.5">
-                            <Skeleton className="h-3.5 w-3/4" />
-                            <Skeleton className="h-3 w-1/2" />
-                          </div>
-                          <div className="w-36 shrink-0">
-                            <Skeleton className="h-3.5 w-4/5" />
-                          </div>
-                          <div className="flex-1">
-                            <Skeleton className="h-3.5 w-2/3" />
-                          </div>
-                          <div className="shrink-0 space-y-1.5 text-right">
-                            <Skeleton className="h-3.5 w-16 ml-auto" />
-                            <Skeleton className="h-3 w-10 ml-auto" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+
+              {recordsSwitching ? (
+                <RecordsSkeleton />
               ) : (
-                <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
+                <RecordsTable
+                  records={displayedRecords}
+                  accounts={accounts}
+                  highlightedId={highlightedId}
+                  onEdit={setEditingRecord}
+                />
               )}
-              {!recordsLoading && !isSearching && hasMore && (
+
+              {!recordsSwitching && !isSearching && hasNextPage && (
                 <div className="flex justify-center pt-2 pb-1">
                   <button
-                    onClick={() => loadMore()}
-                    disabled={loadingMore}
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
                     className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {loadingMore ? "Loading…" : "Load more"}
+                    {isFetchingNextPage ? "Loading…" : "Load more"}
                   </button>
                 </div>
               )}
@@ -852,7 +782,7 @@ export default function Home() {
           records={allRecords}
           isOpen={!!duplicatingRecord}
           onClose={() => setDuplicatingRecord(null)}
-          onSuccess={() => { setDuplicatingRecord(null); loadData(token, selectedAccountRef.current); }}
+          onSuccess={() => { setDuplicatingRecord(null); invalidateAll(); }}
           onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
         />
       )}

@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchCategories } from "../actions";
+import { fetchCategories, fetchRecords } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
@@ -466,7 +466,9 @@ function RecordForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [apiSuggestions, setApiSuggestions] = useState<WalletRecord[]>([]);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
@@ -475,6 +477,32 @@ function RecordForm({
     if (!token) return;
     fetchCategories(token).then(setCategories).catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (suggestionAbortRef.current) clearTimeout(suggestionAbortRef.current);
+    setApiSuggestions([]);
+    if (!note.trim() || !token) return;
+    let cancelled = false;
+    const q = note.trim();
+    suggestionAbortRef.current = setTimeout(() => {
+      Promise.all([
+        fetchRecords(token, { from: "2000-01-01", limit: 10, note: q }),
+        fetchRecords(token, { from: "2000-01-01", limit: 10, counterParty: q }),
+      ]).then(([noteRes, cpRes]) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: WalletRecord[] = [];
+        for (const r of [...noteRes.records, ...cpRes.records]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        setApiSuggestions(merged.slice(0, 10));
+      }).catch(() => {});
+    }, 300);
+    return () => {
+      cancelled = true;
+      if (suggestionAbortRef.current) clearTimeout(suggestionAbortRef.current);
+    };
+  }, [note, token]);
 
   useEffect(() => {
     if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
@@ -488,19 +516,14 @@ function RecordForm({
 
   const suggestions = (() => {
     if (!note.trim()) return [];
-    const q = note.toLowerCase();
     const seen = new Set<string>();
     const results: WalletRecord[] = [];
-    for (const r of records) {
+    for (const r of apiSuggestions) {
       if (mode === "edit" && r.id === initialRecord?.id) continue;
-      const noteText = (r.note ?? "").toLowerCase();
-      const payeeText = (r.counterParty ?? "").toLowerCase();
-      if (!noteText.includes(q) && !payeeText.includes(q)) continue;
       const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(r);
-      if (results.length >= 8) break;
     }
     return results;
   })();

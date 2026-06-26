@@ -22,12 +22,14 @@ export async function fetchAccounts(token: string) {
 
 export async function fetchRecords(
   token: string,
-  opts: { accountId?: string; from?: string; offset?: number; limit?: number } = {}
+  opts: { accountId?: string; from?: string; offset?: number; limit?: number; note?: string; counterParty?: string } = {}
 ): Promise<{ records: WalletRecord[]; nextOffset: number | null }> {
-  const { accountId, from, offset = 0, limit = 200 } = opts;
+  const { accountId, from, offset = 0, limit = 200, note, counterParty } = opts;
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (accountId) params.set("accountId", accountId);
   if (from) params.set("recordDate", `gte.${from}`);
+  if (note) params.set("note", `contains-i.${note}`);
+  if (counterParty) params.set("counterParty", `contains-i.${counterParty}`);
   const res = await fetch(`${BASE}/records?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",

@@ -41,6 +41,7 @@ import {
   SidebarMenuButton,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -466,7 +467,48 @@ export default function Home() {
   return (
     <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
       {/* Sidebar */}
-      {activeAccounts.length > 0 && (
+      {token && loading && activeAccounts.length === 0 ? (
+        <Sidebar variant="floating">
+          <SidebarHeader className="px-4 pt-4 pb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup className="pt-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <div className="px-2 py-1.5">
+                      <Skeleton className="h-9 w-full rounded-lg" />
+                    </div>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarSeparator />
+            <SidebarGroup className="pt-0">
+              <SidebarGroupLabel>
+                <Skeleton className="h-2.5 w-16" />
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {[...Array(4)].map((_, i) => (
+                    <SidebarMenuItem key={i}>
+                      <div className="flex items-center gap-2 px-2 py-2">
+                        <Skeleton className="size-4 rounded-full shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-3.5 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
+                        <Skeleton className="h-3 w-4 shrink-0" />
+                      </div>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
+      ) : activeAccounts.length > 0 ? (
         <Sidebar variant="floating">
           <SidebarHeader className="px-4 pt-4 pb-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
@@ -538,7 +580,7 @@ export default function Home() {
             ))}
           </SidebarContent>
         </Sidebar>
-      )}
+      ) : null}
 
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -551,7 +593,49 @@ export default function Home() {
 
           {!token && <TokenConnectForm onSave={handleSave} />}
 
-          {(activeAccounts.length > 0 || records.length > 0) && (
+          {token && loading && activeAccounts.length === 0 && records.length === 0 ? (
+            <div className="px-6 py-6 space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-3.5 w-52" />
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Skeleton className="h-8 w-28 rounded-full" />
+                  <Skeleton className="size-8 rounded-full" />
+                </div>
+              </div>
+              <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+                {([3, 2, 4] as const).map((count, gi) => (
+                  <div key={gi}>
+                    <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                    {[...Array(count)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
+                        <Skeleton className="size-9 rounded-full shrink-0" />
+                        <div className="w-40 shrink-0 space-y-1.5">
+                          <Skeleton className="h-3.5 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
+                        <div className="w-36 shrink-0">
+                          <Skeleton className="h-3.5 w-4/5" />
+                        </div>
+                        <div className="flex-1">
+                          <Skeleton className="h-3.5 w-2/3" />
+                        </div>
+                        <div className="shrink-0 space-y-1.5 text-right">
+                          <Skeleton className="h-3.5 w-16 ml-auto" />
+                          <Skeleton className="h-3 w-10 ml-auto" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (activeAccounts.length > 0 || records.length > 0) ? (
             <div className="px-6 py-6 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -563,7 +647,6 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {loading && <span className="text-xs text-muted animate-pulse">Loading…</span>}
                   {token && (
                     <AddRecordButton
                       token={token}
@@ -584,7 +667,7 @@ export default function Home() {
               </div>
               <RecordsTable records={displayedRecords} accounts={accounts} highlightedId={highlightedId} onEdit={setEditingRecord} />
             </div>
-          )}
+          ) : null}
         </main>
       </div>
 

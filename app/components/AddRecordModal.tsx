@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,35 +98,106 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
   );
 }
 
-// ── Edit Record Modal ─────────────────────────────────────────────────────────
+// ── Record Detail Modal ───────────────────────────────────────────────────────
 
-interface EditProps {
-  token: string;
-  accounts: Account[];
-  records: WalletRecord[];
+export function RecordDetailModal({ record, accounts, isOpen, onClose }: {
   record: WalletRecord;
+  accounts: Account[];
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
-  onGoToRecord: (id: string) => void;
-}
+}) {
+  const account = accounts.find((a) => a.id === record.accountId);
+  const AccountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
+  const accountColor = account?.color ?? "var(--muted-foreground)";
+  const CategoryIcon = getCategoryIcon(record.category?.name ?? "", record.category?.group?.name);
 
-export function EditRecordModal({ token, accounts, records, record, isOpen, onClose, onSuccess, onGoToRecord }: EditProps) {
+  const positive = record.amount.value > 0;
+  const recordType = record.recordType?.toLowerCase();
+  const typeLabel = recordType === "income" ? "Income" : recordType === "transfer" ? "Transfer" : "Expense";
+
+  const paymentLabel = PAYMENT_TYPES.find((p) => p.id === record.paymentType)?.label ?? record.paymentType;
+  const stateLabel = RECORD_STATES.find((s) => s.id === record.recordState)?.label ?? record.recordState ?? "—";
+
+  const date = record.recordDate ? new Date(record.recordDate) : null;
+  const dateStr = date
+    ? date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+    : "—";
+  const timeStr = date
+    ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    : "";
+
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
-        <RecordForm
-          mode="edit"
-          initialRecord={record}
-          token={token}
-          accounts={accounts}
-          records={records}
-          onSuccess={() => { onClose(); onSuccess(); }}
-          onCancel={onClose}
-          onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
-        />
+      <DialogContent className="max-w-sm w-full p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-base">Record Details</DialogTitle>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              typeLabel === "Income" ? "bg-success/15 text-success" :
+              typeLabel === "Transfer" ? "bg-blue-500/15 text-blue-400" :
+              "bg-danger/15 text-danger"
+            }`}>{typeLabel}</span>
+          </div>
+          <p className={`text-3xl font-bold tabular-nums mt-3 ${positive ? "text-success" : "text-danger"}`}>
+            {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
+          </p>
+        </DialogHeader>
+
+        <div className="px-6 py-5 space-y-3.5">
+          <DetailRow label="Category">
+            <div className="flex items-center gap-2">
+              <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <CategoryIcon className="size-3" />
+              </div>
+              <span className="text-sm">{record.category?.name ?? "—"}</span>
+              {record.category?.group && (
+                <span className="text-xs text-muted">· {record.category.group.name}</span>
+              )}
+            </div>
+          </DetailRow>
+
+          <DetailRow label="Account">
+            <div className="flex items-center gap-2">
+              <AccountIcon weight="fill" className="size-4 shrink-0" style={{ color: accountColor }} />
+              <span className="text-sm">{record.accountName}</span>
+            </div>
+          </DetailRow>
+
+          <DetailRow label="Date">
+            <span className="text-sm">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</span>
+          </DetailRow>
+
+          <DetailRow label="Payment">
+            <span className="text-sm">{paymentLabel}</span>
+          </DetailRow>
+
+          <DetailRow label="Status">
+            <span className="text-sm">{stateLabel}</span>
+          </DetailRow>
+
+          {record.counterParty && (
+            <DetailRow label="Payer">
+              <span className="text-sm">{record.counterParty}</span>
+            </DetailRow>
+          )}
+
+          {record.note && (
+            <DetailRow label="Note">
+              <span className="text-sm text-muted">{record.note}</span>
+            </DetailRow>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-4">
+      <span className="text-xs text-muted w-16 shrink-0 pt-0.5">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
   );
 }
 

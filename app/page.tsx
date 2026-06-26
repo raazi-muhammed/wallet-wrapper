@@ -26,7 +26,7 @@ import {
 import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
-import { AddRecordButton, EditRecordModal } from "./components/AddRecordModal";
+import { AddRecordButton, RecordDetailModal } from "./components/AddRecordModal";
 import type { ComponentType } from "react";
 import {
   SidebarProvider,
@@ -672,15 +672,11 @@ export default function Home() {
       </div>
 
       {editingRecord && (
-        <EditRecordModal
-          token={token}
-          accounts={activeAccounts}
-          records={records}
+        <RecordDetailModal
           record={editingRecord}
+          accounts={activeAccounts}
           isOpen={!!editingRecord}
           onClose={() => setEditingRecord(null)}
-          onSuccess={() => { setEditingRecord(null); loadData(token); }}
-          onGoToRecord={handleGoToRecord}
         />
       )}
     </SidebarProvider>

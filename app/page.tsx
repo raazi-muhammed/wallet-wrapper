@@ -407,84 +407,111 @@ function CreditUsageBar({ pct }: { pct: number }) {
 
 function InsightsView({ accounts }: { accounts: Account[] }) {
   const creditCards = accounts.filter((a) => a.accountType === "CreditCard");
+  const currentAccounts = accounts.filter((a) => a.accountType === "CurrentAccount");
 
   const totalUsed = creditCards.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0);
   const totalLimit = creditCards.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0);
   const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
 
-  if (creditCards.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted">
-        <CreditCard className="size-8" />
-        <p className="text-sm">No credit card accounts found.</p>
-      </div>
-    );
-  }
+  const currentAccountsTotal = currentAccounts.reduce((s, a) => s + a.balance.currentBalance, 0);
 
   return (
     <div className="px-6 py-6 space-y-6">
       <h2 className="text-base font-semibold text-foreground">Insights</h2>
 
       {/* Credit Cards section */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted">Credit Cards</p>
+      {creditCards.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Credit Cards</p>
 
-        {creditCards.map((a) => {
-          const used = Math.abs(Math.min(a.balance.currentBalance, 0));
-          const limit = a.balance.creditLimit ?? 0;
-          const pct = limit > 0 ? (used / limit) * 100 : 0;
-          const Icon = getAccountIcon(a.accountType, a.name);
-          const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
+          {creditCards.map((a) => {
+            const used = Math.abs(Math.min(a.balance.currentBalance, 0));
+            const limit = a.balance.creditLimit ?? 0;
+            const pct = limit > 0 ? (used / limit) * 100 : 0;
+            const Icon = getAccountIcon(a.accountType, a.name);
+            const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
 
-          return (
-            <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
-              <div className="flex items-center gap-2.5">
-                <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
-                <span className="text-sm font-medium text-foreground">{a.name}</span>
+            return (
+              <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
+                <div className="flex items-center gap-2.5">
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <span className="text-sm font-medium text-foreground">{a.name}</span>
+                </div>
+                <CreditUsageBar pct={pct} />
+                <div className="flex items-center justify-between text-xs">
+                  <div className="space-y-0.5">
+                    <p className="text-muted">Used</p>
+                    <p className="font-semibold text-foreground tabular-nums">{fmt(used, a.balance.currencyCode)}</p>
+                  </div>
+                  <div className="space-y-0.5 text-center">
+                    <p className="text-muted">Usage</p>
+                    <p className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</p>
+                  </div>
+                  <div className="space-y-0.5 text-right">
+                    <p className="text-muted">Limit</p>
+                    <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? fmt(limit, a.balance.currencyCode) : "—"}</p>
+                  </div>
+                </div>
               </div>
-              <CreditUsageBar pct={pct} />
+            );
+          })}
+
+          {creditCards.length > 1 && (
+            <div className="rounded-xl p-4 space-y-3 border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+              <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
+              <CreditUsageBar pct={totalPct} />
               <div className="flex items-center justify-between text-xs">
                 <div className="space-y-0.5">
                   <p className="text-muted">Used</p>
-                  <p className="font-semibold text-foreground tabular-nums">{fmt(used, a.balance.currencyCode)}</p>
+                  <p className="font-semibold text-foreground tabular-nums">{fmt(totalUsed, creditCards[0].balance.currencyCode)}</p>
                 </div>
                 <div className="space-y-0.5 text-center">
                   <p className="text-muted">Usage</p>
-                  <p className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</p>
+                  <p className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>
+                    {totalPct.toFixed(1)}%
+                  </p>
                 </div>
                 <div className="space-y-0.5 text-right">
                   <p className="text-muted">Limit</p>
-                  <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? fmt(limit, a.balance.currencyCode) : "—"}</p>
+                  <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? fmt(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
                 </div>
               </div>
             </div>
-          );
-        })}
+          )}
+        </div>
+      )}
 
-        {/* Total row */}
-        {creditCards.length > 1 && (
-          <div className="rounded-xl p-4 space-y-3 border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
-            <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
-            <CreditUsageBar pct={totalPct} />
-            <div className="flex items-center justify-between text-xs">
-              <div className="space-y-0.5">
-                <p className="text-muted">Used</p>
-                <p className="font-semibold text-foreground tabular-nums">{fmt(totalUsed, creditCards[0].balance.currencyCode)}</p>
+      {/* Current Accounts section */}
+      {currentAccounts.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Current Accounts</p>
+
+          {currentAccounts.map((a) => {
+            const Icon = getAccountIcon(a.accountType, a.name);
+            const bal = a.balance.currentBalance;
+            return (
+              <div key={a.id} className="rounded-xl p-4 flex items-center justify-between" style={{ background: "hsl(240 3% 6%)" }}>
+                <div className="flex items-center gap-2.5">
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <span className="text-sm font-medium text-foreground">{a.name}</span>
+                </div>
+                <span className={`text-sm font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
+                  {fmt(bal, a.balance.currencyCode)}
+                </span>
               </div>
-              <div className="space-y-0.5 text-center">
-                <p className="text-muted">Usage</p>
-                <p className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>
-                  {totalPct.toFixed(1)}%
-                </p>
-              </div>
-              <div className="space-y-0.5 text-right">
-                <p className="text-muted">Limit</p>
-                <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? fmt(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
-              </div>
+            );
+          })}
+
+          {currentAccounts.length > 1 && (
+            <div className="rounded-xl p-4 flex items-center justify-between border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+              <span className="text-xs font-semibold text-muted uppercase tracking-widest">Total</span>
+              <span className={`text-sm font-semibold tabular-nums ${currentAccountsTotal < 0 ? "text-danger" : "text-foreground"}`}>
+                {fmt(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}
+              </span>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

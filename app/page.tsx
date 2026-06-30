@@ -17,6 +17,8 @@ import {
   Search,
   X,
   Info,
+  LayoutList,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -721,6 +723,7 @@ export default function Home() {
                       onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
                     >
+                      <LayoutList className="size-4 shrink-0" />
                       <span className="font-medium">All Accounts</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -737,6 +740,7 @@ export default function Home() {
                       onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
                       size="lg"
                     >
+                      <Sparkles className="size-4 shrink-0" />
                       <span className="font-medium">Insights</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -788,60 +792,53 @@ export default function Home() {
                                   <Info className="size-3.5" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent side="right" align="start" className="w-64 p-4 space-y-3 border-border bg-[#1a1a1a]">
-                                <div className="flex items-center gap-2.5">
-                                  <Icon weight="fill" className="size-5 shrink-0" style={{ color: a.color ?? "currentColor" }} />
-                                  <p className="text-sm font-semibold text-foreground">{a.name}</p>
+                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                                {/* Header */}
+                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-white/[0.06]">
+                                  <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
+                                    <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                                    <p className="text-[11px] text-muted">{a.accountType.replace(/([A-Z])/g, " $1").trim()}</p>
+                                  </div>
                                 </div>
-                                <div className="space-y-2 text-xs">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted">Type</span>
-                                    <span className="text-foreground">{a.accountType.replace(/([A-Z])/g, " $1").trim()}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted">Balance</span>
-                                    <span className={`font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
+
+                                {/* Stats grid */}
+                                <div className="p-3 space-y-2">
+                                  {/* Balance — full width */}
+                                  <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                                    <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
+                                    <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
                                       {fmt(bal, a.balance.currencyCode)}
-                                    </span>
+                                    </p>
                                   </div>
-                                  {a.initialBalance.value !== 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted">Initial balance</span>
-                                      <span className="text-foreground tabular-nums">{fmt(a.initialBalance.value, a.initialBalance.currencyCode)}</span>
-                                    </div>
-                                  )}
-                                  {a.balance.creditLimit != null && a.balance.creditLimit > 0 && (
-                                    <>
-                                      <div className="flex justify-between">
-                                        <span className="text-muted">Credit limit</span>
-                                        <span className="text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-muted">Usage</span>
-                                        {(() => {
-                                          const used = Math.abs(Math.min(bal, 0));
-                                          const pct = (used / a.balance.creditLimit!) * 100;
-                                          return (
-                                            <span className={`font-semibold tabular-nums ${pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success"}`}>
-                                              {pct.toFixed(1)}%
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
-                                      {a.balance.availableCredit != null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-muted">Available credit</span>
-                                          <span className="text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span>
+
+                                  {/* Credit card compact */}
+                                  {a.balance.creditLimit != null && a.balance.creditLimit > 0 && (() => {
+                                    const used = Math.abs(Math.min(bal, 0));
+                                    const pct = (used / a.balance.creditLimit!) * 100;
+                                    const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
+                                    const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
+                                    return (
+                                      <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-muted">Limit</span>
+                                          <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
                                         </div>
-                                      )}
-                                    </>
-                                  )}
-                                  {a.recordStats && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted">Transactions</span>
-                                      <span className="text-foreground">{a.recordStats.recordCount.toLocaleString()}</span>
-                                    </div>
-                                  )}
+                                        <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                          {a.balance.availableCredit != null
+                                            ? <><span className="text-muted">Available</span><span className="font-medium text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span></>
+                                            : <span />
+                                          }
+                                          <span className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </PopoverContent>
                             </Popover>

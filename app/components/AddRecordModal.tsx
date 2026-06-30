@@ -508,6 +508,10 @@ function RecordForm({
   const [debouncedNote, setDebouncedNote] = useState(note);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [showPayerSuggestions, setShowPayerSuggestions] = useState(false);
+  const [debouncedPayer, setDebouncedPayer] = useState(payer);
+  const payerBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
 
@@ -516,6 +520,11 @@ function RecordForm({
     const t = setTimeout(() => setDebouncedNote(note), 300);
     return () => clearTimeout(t);
   }, [note]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPayer(payer), 300);
+    return () => clearTimeout(t);
+  }, [payer]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories", token],
@@ -542,6 +551,24 @@ function RecordForm({
     enabled: !!token && debouncedNote.trim().length > 0,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
+  });
+
+  const { data: apiPayerSuggestions = [] } = useQuery({
+    queryKey: ["payerSuggestions", token, debouncedPayer],
+    queryFn: async () => {
+      const q = debouncedPayer.trim();
+      const res = await fetchRecords(token, { from: "2000-01-01", limit: 20, counterParty: q });
+      const seen = new Set<string>();
+      const names: string[] = [];
+      for (const r of res.records) {
+        const cp = r.counterParty?.trim();
+        if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
+      }
+      return names.slice(0, 8);
+    },
+    enabled: !!token && debouncedPayer.trim().length > 0,
+    staleTime: 30_000,
+    placeholderData: [] as string[],
   });
 
   useEffect(() => {
@@ -587,6 +614,14 @@ function RecordForm({
 
   function handleSuggestionMouseDown() {
     if (blurTimer.current) clearTimeout(blurTimer.current);
+  }
+
+  function handlePayerBlur() {
+    payerBlurTimer.current = setTimeout(() => setShowPayerSuggestions(false), 150);
+  }
+
+  function handlePayerSuggestionMouseDown() {
+    if (payerBlurTimer.current) clearTimeout(payerBlurTimer.current);
   }
 
   function setDateToday() {
@@ -823,14 +858,32 @@ function RecordForm({
               )}
             </div>
 
-            <div>
+            <div className="relative">
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
               <Input
                 value={payer}
-                onChange={(e) => setPayer(e.target.value)}
+                onChange={(e) => { setPayer(e.target.value); setShowPayerSuggestions(true); }}
+                onFocus={() => payer.trim() && setShowPayerSuggestions(true)}
+                onBlur={handlePayerBlur}
                 aria-label="Payer"
+                aria-autocomplete="list"
+                aria-expanded={showPayerSuggestions && apiPayerSuggestions.length > 0}
                 className="text-foreground placeholder:text-muted rounded-xl"
               />
+              {showPayerSuggestions && apiPayerSuggestions.length > 0 && (
+                <div onMouseDown={handlePayerSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border-0 bg-[#1F1F1E] shadow-lg overflow-hidden">
+                  {apiPayerSuggestions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => { setPayer(name); setShowPayerSuggestions(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm text-foreground hover:bg-default transition-colors truncate"
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>

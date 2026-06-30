@@ -16,6 +16,7 @@ import {
   Building2,
   Search,
   X,
+  Info,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -30,6 +31,7 @@ import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./components/AddRecordModal";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ComponentType } from "react";
 import {
   SidebarProvider,
@@ -718,10 +720,8 @@ export default function Home() {
                       isActive={selectedAccount === "all" && activeView === "accounts"}
                       onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
-                      className="justify-between"
                     >
                       <span className="font-medium">All Accounts</span>
-                      <span className="text-xs text-sidebar-foreground/50">{allRecords.length}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
@@ -761,18 +761,16 @@ export default function Home() {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {accs.map((a) => {
-                      const count = allRecords.filter((r) => r.accountId === a.id).length;
                       const Icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
+                      const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
                         <SidebarMenuItem key={a.id}>
-                          <SidebarMenuButton
-                            isActive={selectedAccount === a.id && activeView === "accounts"}
-                            onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
-                            size="lg"
-                            className="justify-between h-auto py-2"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
+                          <div className={`group/row flex items-center gap-1 rounded-lg px-2 py-2 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
+                            <button
+                              className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                              onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
+                            >
                               <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{a.name}</p>
@@ -780,9 +778,74 @@ export default function Home() {
                                   {fmt(bal, a.balance.currencyCode)}
                                 </p>
                               </div>
-                            </div>
-                            <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
-                          </SidebarMenuButton>
+                            </button>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors ${isActive ? "opacity-100" : "opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto"}`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="right" align="start" className="w-64 p-4 space-y-3 border-border bg-[#1a1a1a]">
+                                <div className="flex items-center gap-2.5">
+                                  <Icon weight="fill" className="size-5 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                                  <p className="text-sm font-semibold text-foreground">{a.name}</p>
+                                </div>
+                                <div className="space-y-2 text-xs">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted">Type</span>
+                                    <span className="text-foreground">{a.accountType.replace(/([A-Z])/g, " $1").trim()}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted">Balance</span>
+                                    <span className={`font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
+                                      {fmt(bal, a.balance.currencyCode)}
+                                    </span>
+                                  </div>
+                                  {a.initialBalance.value !== 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted">Initial balance</span>
+                                      <span className="text-foreground tabular-nums">{fmt(a.initialBalance.value, a.initialBalance.currencyCode)}</span>
+                                    </div>
+                                  )}
+                                  {a.balance.creditLimit != null && a.balance.creditLimit > 0 && (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-muted">Credit limit</span>
+                                        <span className="text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-muted">Usage</span>
+                                        {(() => {
+                                          const used = Math.abs(Math.min(bal, 0));
+                                          const pct = (used / a.balance.creditLimit!) * 100;
+                                          return (
+                                            <span className={`font-semibold tabular-nums ${pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success"}`}>
+                                              {pct.toFixed(1)}%
+                                            </span>
+                                          );
+                                        })()}
+                                      </div>
+                                      {a.balance.availableCredit != null && (
+                                        <div className="flex justify-between">
+                                          <span className="text-muted">Available credit</span>
+                                          <span className="text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                  {a.recordStats && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted">Transactions</span>
+                                      <span className="text-foreground">{a.recordStats.recordCount.toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         </SidebarMenuItem>
                       );
                     })}

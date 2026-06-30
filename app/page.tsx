@@ -16,6 +16,9 @@ import {
   Building2,
   Search,
   X,
+  Info,
+  LayoutList,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -30,6 +33,7 @@ import { fetchAccounts, fetchRecords, fetchApiStats } from "./actions";
 import type { Account, WalletRecord, ApiStats } from "./actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./components/AddRecordModal";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ComponentType } from "react";
 import {
   SidebarProvider,
@@ -394,11 +398,134 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
   );
 }
 
+// ── Insights View ─────────────────────────────────────────────────────────────
+
+function CreditUsageBar({ pct }: { pct: number }) {
+  const color = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
+  return (
+    <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    </div>
+  );
+}
+
+function InsightsView({ accounts }: { accounts: Account[] }) {
+  const creditCards = accounts.filter((a) => a.accountType === "CreditCard");
+  const currentAccounts = accounts.filter((a) => a.accountType === "CurrentAccount");
+
+  const totalUsed = creditCards.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0);
+  const totalLimit = creditCards.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0);
+  const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+
+  const currentAccountsTotal = currentAccounts.reduce((s, a) => s + a.balance.currentBalance, 0);
+
+  return (
+    <div className="px-6 py-6 space-y-6">
+      <h2 className="text-base font-semibold text-foreground">Insights</h2>
+
+      {/* Credit Cards section */}
+      {creditCards.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Credit Cards</p>
+
+          {creditCards.map((a) => {
+            const used = Math.abs(Math.min(a.balance.currentBalance, 0));
+            const limit = a.balance.creditLimit ?? 0;
+            const pct = limit > 0 ? (used / limit) * 100 : 0;
+            const Icon = getAccountIcon(a.accountType, a.name);
+            const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
+
+            return (
+              <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
+                <div className="flex items-center gap-2.5">
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <span className="text-sm font-medium text-foreground">{a.name}</span>
+                </div>
+                <CreditUsageBar pct={pct} />
+                <div className="flex items-center justify-between text-xs">
+                  <div className="space-y-0.5">
+                    <p className="text-muted">Used</p>
+                    <p className="font-semibold text-foreground tabular-nums">{fmt(used, a.balance.currencyCode)}</p>
+                  </div>
+                  <div className="space-y-0.5 text-center">
+                    <p className="text-muted">Usage</p>
+                    <p className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</p>
+                  </div>
+                  <div className="space-y-0.5 text-right">
+                    <p className="text-muted">Limit</p>
+                    <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? fmt(limit, a.balance.currencyCode) : "—"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {creditCards.length > 1 && (
+            <div className="rounded-xl p-4 space-y-3 border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+              <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
+              <CreditUsageBar pct={totalPct} />
+              <div className="flex items-center justify-between text-xs">
+                <div className="space-y-0.5">
+                  <p className="text-muted">Used</p>
+                  <p className="font-semibold text-foreground tabular-nums">{fmt(totalUsed, creditCards[0].balance.currencyCode)}</p>
+                </div>
+                <div className="space-y-0.5 text-center">
+                  <p className="text-muted">Usage</p>
+                  <p className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>
+                    {totalPct.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="space-y-0.5 text-right">
+                  <p className="text-muted">Limit</p>
+                  <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? fmt(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Current Accounts section */}
+      {currentAccounts.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Current Accounts</p>
+
+          {currentAccounts.map((a) => {
+            const Icon = getAccountIcon(a.accountType, a.name);
+            const bal = a.balance.currentBalance;
+            return (
+              <div key={a.id} className="rounded-xl p-4 flex items-center justify-between" style={{ background: "hsl(240 3% 6%)" }}>
+                <div className="flex items-center gap-2.5">
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <span className="text-sm font-medium text-foreground">{a.name}</span>
+                </div>
+                <span className={`text-sm font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
+                  {fmt(bal, a.balance.currencyCode)}
+                </span>
+              </div>
+            );
+          })}
+
+          {currentAccounts.length > 1 && (
+            <div className="rounded-xl p-4 flex items-center justify-between border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+              <span className="text-xs font-semibold text-muted uppercase tracking-widest">Total</span>
+              <span className={`text-sm font-semibold tabular-nums ${currentAccountsTotal < 0 ? "text-danger" : "text-foreground"}`}>
+                {fmt(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState("");
+  const [activeView, setActiveView] = useState<"accounts" | "insights">("accounts");
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [period, setPeriod] = useState<"3m" | "6m" | "1y" | "all">("3m");
   const [searchInput, setSearchInput] = useState("");
@@ -592,13 +719,29 @@ export default function Home() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      isActive={selectedAccount === "all"}
-                      onClick={() => setSelectedAccount("all")}
+                      isActive={selectedAccount === "all" && activeView === "accounts"}
+                      onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
-                      className="justify-between"
                     >
+                      <LayoutList className="size-4 shrink-0" />
                       <span className="font-medium">All Accounts</span>
-                      <span className="text-xs text-sidebar-foreground/50">{allRecords.length}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup className="pt-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={activeView === "insights"}
+                      onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
+                      size="lg"
+                    >
+                      <Sparkles className="size-4 shrink-0" />
+                      <span className="font-medium">Insights</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
@@ -614,26 +757,74 @@ export default function Home() {
                 map.get(type)!.push(a);
                 return map;
               }, new Map<string, typeof activeAccounts>())
-            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => (
+            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => {
+              const isCreditCard = type === "CreditCard";
+              const totalBal = accs.reduce((s, a) => s + a.balance.currentBalance, 0);
+              const totalLimit = isCreditCard ? accs.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0) : 0;
+              const totalUsed = isCreditCard ? accs.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0) : 0;
+              const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+              const totalAvailable = isCreditCard ? accs.reduce((s, a) => s + (a.balance.availableCredit ?? 0), 0) : 0;
+              const currency = accs[0]?.balance.currencyCode;
+              return (
               <SidebarGroup key={type} className="pt-0">
-                <SidebarGroupLabel className="text-[10px] uppercase tracking-widest px-2">
-                  {type.replace(/([A-Z])/g, " $1").trim()}
+                <SidebarGroupLabel className="group/label text-[10px] uppercase tracking-widest px-2 flex items-center justify-between">
+                  <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-0.5 rounded text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors opacity-0 group-hover/label:opacity-100"
+                      >
+                        <Info className="size-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                      <div className="px-3 pt-3 pb-2 border-b border-white/[0.06]">
+                        <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
+                          <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
+                            {fmt(totalBal, currency)}
+                          </p>
+                        </div>
+                        {isCreditCard && totalLimit > 0 && (
+                          <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Limit</span>
+                              <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                              <div className={`h-full rounded-full ${totalPct >= 90 ? "bg-danger" : totalPct >= 70 ? "bg-warning" : "bg-success"}`} style={{ width: `${Math.min(totalPct, 100)}%` }} />
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Usage</span>
+                              <span className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>{totalPct.toFixed(1)}%</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Available</span>
+                              <span className="font-medium text-success tabular-nums">{fmt(totalAvailable, currency)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {accs.map((a) => {
-                      const count = allRecords.filter((r) => r.accountId === a.id).length;
                       const Icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
+                      const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
                         <SidebarMenuItem key={a.id}>
-                          <SidebarMenuButton
-                            isActive={selectedAccount === a.id}
-                            onClick={() => setSelectedAccount(a.id)}
-                            size="lg"
-                            className="justify-between h-auto py-2"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
+                          <div className={`group/row flex items-center gap-1 rounded-lg px-2 py-2 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
+                            <button
+                              className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                              onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
+                            >
                               <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{a.name}</p>
@@ -641,16 +832,78 @@ export default function Home() {
                                   {fmt(bal, a.balance.currencyCode)}
                                 </p>
                               </div>
-                            </div>
-                            <span className="text-xs text-sidebar-foreground/40 shrink-0">{count}</span>
-                          </SidebarMenuButton>
+                            </button>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors ${isActive ? "opacity-100" : "opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto"}`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                                {/* Header */}
+                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-white/[0.06]">
+                                  <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
+                                    <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                                    <p className="text-[11px] text-muted">{a.accountType.replace(/([A-Z])/g, " $1").trim()}</p>
+                                  </div>
+                                </div>
+
+                                {/* Stats grid */}
+                                <div className="p-3 space-y-2">
+                                  {/* Balance — full width */}
+                                  <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                                    <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
+                                    <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
+                                      {fmt(bal, a.balance.currencyCode)}
+                                    </p>
+                                  </div>
+
+                                  {/* Credit card compact */}
+                                  {a.balance.creditLimit != null && a.balance.creditLimit > 0 && (() => {
+                                    const used = Math.abs(Math.min(bal, 0));
+                                    const pct = (used / a.balance.creditLimit!) * 100;
+                                    const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
+                                    const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
+                                    return (
+                                      <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-muted">Limit</span>
+                                          <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
+                                        </div>
+                                        <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-muted">Usage</span>
+                                          <span className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</span>
+                                        </div>
+                                        {a.balance.availableCredit != null && (
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted">Available</span>
+                                            <span className="font-medium text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         </SidebarMenuItem>
                       );
                     })}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            ))}
+              );
+            })}
           </SidebarContent>
         </Sidebar>
       ) : null}
@@ -661,7 +914,9 @@ export default function Home() {
 
           {!token && <TokenConnectForm onSave={handleSave} />}
 
-          {token && initialLoading ? (
+          {activeView === "insights" && !initialLoading ? (
+            <InsightsView accounts={activeAccounts} />
+          ) : token && initialLoading ? (
             <div className="px-6 py-6 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1.5">

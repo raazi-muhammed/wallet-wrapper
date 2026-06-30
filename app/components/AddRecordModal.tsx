@@ -646,31 +646,41 @@ function RecordForm({
   const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
     mutationFn: async (addAnother: boolean | "sameDate") => {
       if (amount === undefined || !accountId) throw new Error("Missing required fields");
-      const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-      const payload: Record<string, unknown> = {
-        accountId,
+
+      const base = {
         note: note || undefined,
         counterParty: payer || undefined,
-        amount: { value: signedAmount, currencyCode },
         recordDate: recordDate.toISOString(),
         paymentType,
         recordState,
+        ...(categoryId ? { categoryId } : {}),
       };
-      if (categoryId) payload.categoryId = categoryId;
-      if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
       let res: Response;
       if (mode === "edit" && initialRecord) {
+        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
         res = await fetch(`/api/wallet/records/${initialRecord.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...base, accountId, amount: { value: signedAmount, currencyCode } }),
         });
-      } else {
+      } else if (recordType === "transfer" && toAccountId) {
+        // Transfers = two records: expense out of source, income into destination
+        const records = [
+          { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode } },
+          { ...base, accountId: toAccountId, amount: { value: Math.abs(amount), currencyCode } },
+        ];
         res = await fetch("/api/wallet/records", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify([payload]),
+          body: JSON.stringify(records),
+        });
+      } else {
+        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
+        res = await fetch("/api/wallet/records", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-wallet-token": token },
+          body: JSON.stringify([{ ...base, accountId, amount: { value: signedAmount, currencyCode } }]),
         });
       }
 

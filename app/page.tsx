@@ -394,11 +394,107 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
   );
 }
 
+// ── Insights View ─────────────────────────────────────────────────────────────
+
+function CreditUsageBar({ pct }: { pct: number }) {
+  const color = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
+  return (
+    <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    </div>
+  );
+}
+
+function InsightsView({ accounts }: { accounts: Account[] }) {
+  const creditCards = accounts.filter((a) => a.accountType === "CreditCard");
+
+  const totalUsed = creditCards.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0);
+  const totalLimit = creditCards.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0);
+  const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+
+  if (creditCards.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted">
+        <CreditCard className="size-8" />
+        <p className="text-sm">No credit card accounts found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-6 space-y-6">
+      <h2 className="text-base font-semibold text-foreground">Insights</h2>
+
+      {/* Credit Cards section */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted">Credit Cards</p>
+
+        {creditCards.map((a) => {
+          const used = Math.abs(Math.min(a.balance.currentBalance, 0));
+          const limit = a.balance.creditLimit ?? 0;
+          const pct = limit > 0 ? (used / limit) * 100 : 0;
+          const Icon = getAccountIcon(a.accountType, a.name);
+          const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
+
+          return (
+            <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
+              <div className="flex items-center gap-2.5">
+                <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                <span className="text-sm font-medium text-foreground">{a.name}</span>
+              </div>
+              <CreditUsageBar pct={pct} />
+              <div className="flex items-center justify-between text-xs">
+                <div className="space-y-0.5">
+                  <p className="text-muted">Used</p>
+                  <p className="font-semibold text-foreground tabular-nums">{fmt(used, a.balance.currencyCode)}</p>
+                </div>
+                <div className="space-y-0.5 text-center">
+                  <p className="text-muted">Usage</p>
+                  <p className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</p>
+                </div>
+                <div className="space-y-0.5 text-right">
+                  <p className="text-muted">Limit</p>
+                  <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? fmt(limit, a.balance.currencyCode) : "—"}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Total row */}
+        {creditCards.length > 1 && (
+          <div className="rounded-xl p-4 space-y-3 border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+            <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
+            <CreditUsageBar pct={totalPct} />
+            <div className="flex items-center justify-between text-xs">
+              <div className="space-y-0.5">
+                <p className="text-muted">Used</p>
+                <p className="font-semibold text-foreground tabular-nums">{fmt(totalUsed, creditCards[0].balance.currencyCode)}</p>
+              </div>
+              <div className="space-y-0.5 text-center">
+                <p className="text-muted">Usage</p>
+                <p className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>
+                  {totalPct.toFixed(1)}%
+                </p>
+              </div>
+              <div className="space-y-0.5 text-right">
+                <p className="text-muted">Limit</p>
+                <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? fmt(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState("");
+  const [activeView, setActiveView] = useState<"accounts" | "insights">("accounts");
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [period, setPeriod] = useState<"3m" | "6m" | "1y" | "all">("3m");
   const [searchInput, setSearchInput] = useState("");
@@ -592,13 +688,29 @@ export default function Home() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      isActive={selectedAccount === "all"}
-                      onClick={() => setSelectedAccount("all")}
+                      isActive={selectedAccount === "all" && activeView === "accounts"}
+                      onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
                       className="justify-between"
                     >
                       <span className="font-medium">All Accounts</span>
                       <span className="text-xs text-sidebar-foreground/50">{allRecords.length}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup className="pt-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={activeView === "insights"}
+                      onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
+                      size="lg"
+                    >
+                      <span className="font-medium">Insights</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
@@ -628,8 +740,8 @@ export default function Home() {
                       return (
                         <SidebarMenuItem key={a.id}>
                           <SidebarMenuButton
-                            isActive={selectedAccount === a.id}
-                            onClick={() => setSelectedAccount(a.id)}
+                            isActive={selectedAccount === a.id && activeView === "accounts"}
+                            onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
                             size="lg"
                             className="justify-between h-auto py-2"
                           >
@@ -661,7 +773,9 @@ export default function Home() {
 
           {!token && <TokenConnectForm onSave={handleSave} />}
 
-          {token && initialLoading ? (
+          {activeView === "insights" && !initialLoading ? (
+            <InsightsView accounts={activeAccounts} />
+          ) : token && initialLoading ? (
             <div className="px-6 py-6 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1.5">

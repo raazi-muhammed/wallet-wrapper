@@ -31,6 +31,8 @@ export interface Account {
     initial: number;
     totalIncomes: number;
     totalExpenses: number;
+    creditLimit?: number;
+    availableCredit?: number;
   };
   recordStats?: { recordCount: number };
 }
@@ -89,6 +91,8 @@ function mapAccount(a: RawAccount): Account {
       initial: a.balance?.initial ?? 0,
       totalIncomes: a.recordStats?.totalIncomes ?? 0,
       totalExpenses: a.recordStats?.totalExpenses ?? 0,
+      creditLimit: a.balance?.creditLimit,
+      availableCredit: a.balance?.availableCredit,
     },
     recordStats: a.recordStats?.recordCount != null
       ? { recordCount: a.recordStats.recordCount }

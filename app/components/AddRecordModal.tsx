@@ -71,9 +71,10 @@ interface AddProps {
   defaultAccountId?: string;
   onSuccess: () => void;
   onGoToRecord: (id: string) => void;
+  onOpenRecord: (record: WalletRecord) => void;
 }
 
-export function AddRecordButton({ token, accounts, records, defaultAccountId, onSuccess, onGoToRecord }: AddProps) {
+export function AddRecordButton({ token, accounts, records, defaultAccountId, onSuccess, onGoToRecord, onOpenRecord }: AddProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -92,6 +93,7 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
             onSuccess={() => { setOpen(false); onSuccess(); }}
             onCancel={() => setOpen(false)}
             onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
+            onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
           />
         </DialogContent>
       </Dialog>
@@ -205,7 +207,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   );
 }
 
-export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord }: {
+export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord, onOpenRecord }: {
   record: WalletRecord;
   token: string;
   accounts: Account[];
@@ -214,6 +216,7 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
   onClose: () => void;
   onSuccess: () => void;
   onGoToRecord: (id: string) => void;
+  onOpenRecord: (record: WalletRecord) => void;
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -228,6 +231,7 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
           onSuccess={() => { onClose(); onSuccess(); }}
           onCancel={onClose}
           onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
+          onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
         />
       </DialogContent>
     </Dialog>
@@ -476,6 +480,7 @@ function RecordForm({
   onSuccess,
   onCancel,
   onGoToRecord,
+  onOpenRecord,
 }: {
   mode: "add" | "edit";
   initialRecord?: WalletRecord;
@@ -486,6 +491,7 @@ function RecordForm({
   onSuccess: () => void;
   onCancel: () => void;
   onGoToRecord: (id: string) => void;
+  onOpenRecord: (record: WalletRecord) => void;
 }) {
   const deriveType = (r?: WalletRecord): RecordType => {
     const t = r?.recordType?.toLowerCase();
@@ -508,6 +514,10 @@ function RecordForm({
   const [debouncedNote, setDebouncedNote] = useState(note);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [showPayerSuggestions, setShowPayerSuggestions] = useState(false);
+  const [debouncedPayer, setDebouncedPayer] = useState(payer);
+  const payerBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
 
@@ -516,6 +526,11 @@ function RecordForm({
     const t = setTimeout(() => setDebouncedNote(note), 300);
     return () => clearTimeout(t);
   }, [note]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPayer(payer), 300);
+    return () => clearTimeout(t);
+  }, [payer]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories", token],
@@ -542,6 +557,24 @@ function RecordForm({
     enabled: !!token && debouncedNote.trim().length > 0,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
+  });
+
+  const { data: apiPayerSuggestions = [] } = useQuery({
+    queryKey: ["payerSuggestions", token, debouncedPayer],
+    queryFn: async () => {
+      const q = debouncedPayer.trim();
+      const res = await fetchRecords(token, { from: "2000-01-01", limit: 20, counterParty: q });
+      const seen = new Set<string>();
+      const names: string[] = [];
+      for (const r of res.records) {
+        const cp = r.counterParty?.trim();
+        if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
+      }
+      return names.slice(0, 8);
+    },
+    enabled: !!token && debouncedPayer.trim().length > 0,
+    staleTime: 30_000,
+    placeholderData: [] as string[],
   });
 
   useEffect(() => {
@@ -589,6 +622,14 @@ function RecordForm({
     if (blurTimer.current) clearTimeout(blurTimer.current);
   }
 
+  function handlePayerBlur() {
+    payerBlurTimer.current = setTimeout(() => setShowPayerSuggestions(false), 150);
+  }
+
+  function handlePayerSuggestionMouseDown() {
+    if (payerBlurTimer.current) clearTimeout(payerBlurTimer.current);
+  }
+
   function setDateToday() {
     const d = new Date();
     d.setHours(recordDate.getHours(), recordDate.getMinutes());
@@ -605,31 +646,41 @@ function RecordForm({
   const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
     mutationFn: async (addAnother: boolean | "sameDate") => {
       if (amount === undefined || !accountId) throw new Error("Missing required fields");
-      const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-      const payload: Record<string, unknown> = {
-        accountId,
+
+      const base = {
         note: note || undefined,
         counterParty: payer || undefined,
-        amount: { value: signedAmount, currencyCode },
         recordDate: recordDate.toISOString(),
         paymentType,
         recordState,
+        ...(categoryId ? { categoryId } : {}),
       };
-      if (categoryId) payload.categoryId = categoryId;
-      if (recordType === "transfer" && toAccountId) payload.toAccountId = toAccountId;
 
       let res: Response;
       if (mode === "edit" && initialRecord) {
+        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
         res = await fetch(`/api/wallet/records/${initialRecord.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...base, accountId, amount: { value: signedAmount, currencyCode } }),
         });
-      } else {
+      } else if (recordType === "transfer" && toAccountId) {
+        // Transfers = two records: expense out of source, income into destination
+        const records = [
+          { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode } },
+          { ...base, accountId: toAccountId, amount: { value: Math.abs(amount), currencyCode } },
+        ];
         res = await fetch("/api/wallet/records", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify([payload]),
+          body: JSON.stringify(records),
+        });
+      } else {
+        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
+        res = await fetch("/api/wallet/records", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-wallet-token": token },
+          body: JSON.stringify([{ ...base, accountId, amount: { value: signedAmount, currencyCode } }]),
         });
       }
 
@@ -748,10 +799,12 @@ function RecordForm({
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
-              <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
-            </div>
+            {recordType !== "transfer" && (
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
+                <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>
@@ -811,7 +864,7 @@ function RecordForm({
                             </span>
                           </div>
                         </button>
-                        <button type="button" onClick={() => onGoToRecord(r.id)} title="Go to this record" className="px-2 py-2.5 text-muted hover:text-foreground transition-colors shrink-0">
+                        <button type="button" onClick={() => onOpenRecord(r)} title="Go to this record" className="px-2 py-2.5 text-muted hover:text-foreground transition-colors shrink-0">
                           <svg xmlns="http://www.w3.org/2000/svg" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                           </svg>
@@ -823,14 +876,32 @@ function RecordForm({
               )}
             </div>
 
-            <div>
+            <div className="relative">
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
               <Input
                 value={payer}
-                onChange={(e) => setPayer(e.target.value)}
+                onChange={(e) => { setPayer(e.target.value); setShowPayerSuggestions(true); }}
+                onFocus={() => payer.trim() && setShowPayerSuggestions(true)}
+                onBlur={handlePayerBlur}
                 aria-label="Payer"
+                aria-autocomplete="list"
+                aria-expanded={showPayerSuggestions && apiPayerSuggestions.length > 0}
                 className="text-foreground placeholder:text-muted rounded-xl"
               />
+              {showPayerSuggestions && apiPayerSuggestions.length > 0 && (
+                <div onMouseDown={handlePayerSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border-0 bg-[#1F1F1E] shadow-lg overflow-hidden">
+                  {apiPayerSuggestions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => { setPayer(name); setShowPayerSuggestions(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm text-foreground hover:bg-default transition-colors truncate"
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>

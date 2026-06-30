@@ -757,10 +757,60 @@ export default function Home() {
                 map.get(type)!.push(a);
                 return map;
               }, new Map<string, typeof activeAccounts>())
-            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => (
+            ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => {
+              const isCreditCard = type === "CreditCard";
+              const totalBal = accs.reduce((s, a) => s + a.balance.currentBalance, 0);
+              const totalLimit = isCreditCard ? accs.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0) : 0;
+              const totalUsed = isCreditCard ? accs.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0) : 0;
+              const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+              const totalAvailable = isCreditCard ? accs.reduce((s, a) => s + (a.balance.availableCredit ?? 0), 0) : 0;
+              const currency = accs[0]?.balance.currencyCode;
+              return (
               <SidebarGroup key={type} className="pt-0">
-                <SidebarGroupLabel className="text-[10px] uppercase tracking-widest px-2">
-                  {type.replace(/([A-Z])/g, " $1").trim()}
+                <SidebarGroupLabel className="group/label text-[10px] uppercase tracking-widest px-2 flex items-center justify-between">
+                  <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-0.5 rounded text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors opacity-0 group-hover/label:opacity-100"
+                      >
+                        <Info className="size-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                      <div className="px-3 pt-3 pb-2 border-b border-white/[0.06]">
+                        <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
+                          <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
+                            {fmt(totalBal, currency)}
+                          </p>
+                        </div>
+                        {isCreditCard && totalLimit > 0 && (
+                          <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Limit</span>
+                              <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                              <div className={`h-full rounded-full ${totalPct >= 90 ? "bg-danger" : totalPct >= 70 ? "bg-warning" : "bg-success"}`} style={{ width: `${Math.min(totalPct, 100)}%` }} />
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Usage</span>
+                              <span className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>{totalPct.toFixed(1)}%</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Available</span>
+                              <span className="font-medium text-success tabular-nums">{fmt(totalAvailable, currency)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
@@ -830,12 +880,15 @@ export default function Home() {
                                           <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                                         </div>
                                         <div className="flex items-center justify-between text-xs">
-                                          {a.balance.availableCredit != null
-                                            ? <><span className="text-muted">Available</span><span className="font-medium text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span></>
-                                            : <span />
-                                          }
+                                          <span className="text-muted">Usage</span>
                                           <span className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</span>
                                         </div>
+                                        {a.balance.availableCredit != null && (
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted">Available</span>
+                                            <span className="font-medium text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })()}
@@ -849,7 +902,8 @@ export default function Home() {
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            ))}
+              );
+            })}
           </SidebarContent>
         </Sidebar>
       ) : null}

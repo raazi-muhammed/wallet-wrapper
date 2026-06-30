@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchCategories, fetchRecords } from "../actions";
+import { fetchCategories, fetchRecords, createRecords, patchRecord } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
@@ -506,8 +506,8 @@ function RecordForm({
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
   const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
-  const [paymentType, setPaymentType] = useState(() => initialRecord?.paymentType ?? "cash");
-  const [recordState, setRecordState] = useState(() => initialRecord?.recordState ?? "cleared");
+  const [paymentType, setPaymentType] = useState<"cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment">(() => (initialRecord?.paymentType as never) ?? "cash");
+  const [recordState, setRecordState] = useState<"cleared" | "uncleared" | "reconciled">(() => (initialRecord?.recordState as never) ?? "cleared");
   const [recordDate, setRecordDate] = useState<Date>(() => new Date());
 
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -610,7 +610,10 @@ function RecordForm({
     const rt = deriveType(r);
     setRecordType(rt);
     setPaymentType(r.paymentType ?? "cash");
-    if (r.recordState) setRecordState(r.recordState);
+    const editableStates = ["cleared", "uncleared", "reconciled"] as const;
+    if (r.recordState && (editableStates as readonly string[]).includes(r.recordState)) {
+      setRecordState(r.recordState as typeof editableStates[number]);
+    }
     setShowSuggestions(false);
   }
 
@@ -656,38 +659,23 @@ function RecordForm({
         ...(categoryId ? { categoryId } : {}),
       };
 
-      let res: Response;
       if (mode === "edit" && initialRecord) {
         const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        res = await fetch(`/api/wallet/records/${initialRecord.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify({ ...base, accountId, amount: { value: signedAmount, currencyCode } }),
+        await patchRecord(token, initialRecord.id, {
+          ...base,
+          accountId,
+          amount: { value: signedAmount, currencyCode },
         });
       } else if (recordType === "transfer" && toAccountId) {
-        // Transfers = two records: expense out of source, income into destination
-        const records = [
+        await createRecords(token, [
           { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode } },
           { ...base, accountId: toAccountId, amount: { value: Math.abs(amount), currencyCode } },
-        ];
-        res = await fetch("/api/wallet/records", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify(records),
-        });
+        ]);
       } else {
         const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        res = await fetch("/api/wallet/records", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-wallet-token": token },
-          body: JSON.stringify([{ ...base, accountId, amount: { value: signedAmount, currencyCode } }]),
-        });
-      }
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const msg = err?.message ?? err?.error ?? err?.errors?.[0]?.message ?? JSON.stringify(err);
-        throw new Error(`HTTP ${res.status}: ${msg}`);
+        await createRecords(token, [
+          { ...base, accountId, amount: { value: signedAmount, currencyCode } },
+        ]);
       }
 
       return addAnother;
@@ -906,7 +894,7 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
-              <Select value={paymentType} onValueChange={setPaymentType}>
+              <Select value={paymentType} onValueChange={(v) => setPaymentType(v as typeof paymentType)}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
@@ -922,7 +910,7 @@ function RecordForm({
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
-              <Select value={recordState} onValueChange={setRecordState}>
+              <Select value={recordState} onValueChange={(v) => setRecordState(v as typeof recordState)}>
                 <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>

@@ -1,21 +1,17 @@
 "use server";
 
-const BASE = "https://rest.budgetbakers.com/wallet/v1/api";
+import { createWalletClient } from "@/lib/wallet-client";
+export type { Account, WalletRecord, Category, ApiStats } from "@/lib/wallet-client";
 
 export async function fetchAccounts(token: string) {
-  const all: Account[] = [];
+  const client = createWalletClient(token);
+  const all: Awaited<ReturnType<typeof client.getAccounts>>["accounts"] = [];
   let offset = 0;
   while (true) {
-    const res = await fetch(`${BASE}/accounts?limit=200&offset=${offset}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`Accounts: ${res.status}`);
-    const data = await res.json();
-    const page: Account[] = data.accounts ?? data;
-    all.push(...page);
-    if (!data.nextOffset || page.length === 0) break;
-    offset = data.nextOffset;
+    const { accounts, nextOffset } = await client.getAccounts({ limit: 200, offset });
+    all.push(...accounts);
+    if (!nextOffset || accounts.length === 0) break;
+    offset = nextOffset;
   }
   return all;
 }
@@ -23,100 +19,33 @@ export async function fetchAccounts(token: string) {
 export async function fetchRecords(
   token: string,
   opts: { accountId?: string; from?: string; offset?: number; limit?: number; note?: string; counterParty?: string } = {}
-): Promise<{ records: WalletRecord[]; nextOffset: number | null }> {
+) {
   const { accountId, from, offset = 0, limit = 200, note, counterParty } = opts;
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (accountId) params.set("accountId", accountId);
-  if (from) params.set("recordDate", `gte.${from}`);
-  if (note) params.set("note", `contains-i.${note}`);
-  if (counterParty) params.set("counterParty", `contains-i.${counterParty}`);
-  const res = await fetch(`${BASE}/records?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  const client = createWalletClient(token);
+  const { records, nextOffset } = await client.getRecords({
+    limit,
+    offset,
+    ...(accountId ? { accountId } : {}),
+    ...(from ? { recordDate: `gte.${from}` } : {}),
+    ...(note ? { note: `contains-i.${note}` } : {}),
+    ...(counterParty ? { counterParty: `contains-i.${counterParty}` } : {}),
   });
-  if (!res.ok) throw new Error(`Records: ${res.status}`);
-  const data = await res.json();
-  return {
-    records: (data.records ?? data) as WalletRecord[],
-    nextOffset: data.nextOffset ?? null,
-  };
+  return { records, nextOffset: nextOffset ?? null };
 }
 
-export async function fetchApiStats(token: string): Promise<ApiStats> {
-  const res = await fetch(`${BASE}/accounts`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Stats: ${res.status}`);
-  return {
-    rateLimit: Number(res.headers.get("x-ratelimit-limit") ?? 300),
-    rateLimitRemaining: Number(res.headers.get("x-ratelimit-remaining") ?? 0),
-    lastDataChangeAt: res.headers.get("x-last-data-change-at") ?? null,
-    lastDataChangeRev: res.headers.get("x-last-data-change-rev") ?? null,
-    syncInProgress: res.headers.get("x-sync-in-progress") === "true",
-  };
-}
-
-export interface ApiStats {
-  rateLimit: number;
-  rateLimitRemaining: number;
-  lastDataChangeAt: string | null;
-  lastDataChangeRev: string | null;
-  syncInProgress: boolean;
-}
-
-export interface Account {
-  id: string;
-  name: string;
-  accountType: string;
-  archived: boolean;
-  color?: string;
-  initialBalance: { value: number; currencyCode: string };
-  balance: {
-    currencyCode: string;
-    currentBalance: number;
-    initial: number;
-    totalIncomes: number;
-    totalExpenses: number;
-  };
-  recordStats?: {
-    recordCount: number;
-  };
-}
-
-export interface WalletRecord {
-  id: string;
-  accountId: string;
-  accountName: string;
-  note?: string;
-  counterParty?: string;
-  amount: { value: number; currencyCode: string };
-  recordDate: string;
-  paymentType: string;
-  recordType: string;
-  recordState?: string;
-  category?: {
-    id: string;
-    name: string;
-    color?: string;
-    group?: { id: string; name: string };
-  };
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  color?: string;
-  categoryType?: string;
-  group?: { id: string; name: string };
+export async function fetchApiStats(token: string) {
+  return createWalletClient(token).getStats();
 }
 
 export async function fetchCategories(token: string) {
-  const res = await fetch(`${BASE}/categories`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Categories: ${res.status}`);
-  const data = await res.json();
-  return (data.categories ?? data) as Category[];
+  const { categories } = await createWalletClient(token).getCategories({ limit: 200 });
+  return categories;
+}
+
+export async function createRecords(token: string, records: import("@/lib/wallet-client").CreateRecordRequest[]) {
+  return createWalletClient(token).createRecords(records);
+}
+
+export async function patchRecord(token: string, id: string, patch: Omit<import("@/lib/wallet-client").PatchRecordItem, "id">) {
+  return createWalletClient(token).patchRecord(id, patch);
 }

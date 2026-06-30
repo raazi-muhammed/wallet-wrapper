@@ -710,6 +710,7 @@ export default function Home() {
                       defaultAccountId={selectedAccount === "all" ? undefined : selectedAccount}
                       onSuccess={invalidateAll}
                       onGoToRecord={handleGoToRecord}
+                      onOpenRecord={setEditingRecord}
                     />
                   )}
                   <SettingsPopover
@@ -784,6 +785,7 @@ export default function Home() {
           onClose={() => setDuplicatingRecord(null)}
           onSuccess={() => { setDuplicatingRecord(null); invalidateAll(); }}
           onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
+          onOpenRecord={(rec) => { setDuplicatingRecord(null); setEditingRecord(rec); }}
         />
       )}
     </SidebarProvider>

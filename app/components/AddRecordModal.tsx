@@ -799,10 +799,12 @@ function RecordForm({
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
-              <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
-            </div>
+            {recordType !== "transfer" && (
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
+                <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>

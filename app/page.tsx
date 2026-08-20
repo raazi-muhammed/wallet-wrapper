@@ -2,15 +2,25 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  CircleDashedIcon,
-  Search01Icon,
-  Cancel01Icon,
-  InformationCircleIcon,
-  LayoutListIcon,
-  SparklesIcon,
-} from "@hugeicons/core-free-icons";
+  Wallet,
+  Banknote,
+  Landmark,
+  PiggyBank,
+  CreditCard,
+  TrendingUp,
+  Shield,
+  CircleDashed,
+  Globe,
+  Gem,
+  Building2,
+  Search,
+  X,
+  Info,
+  LayoutList,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -200,7 +210,7 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <HugeiconsIcon icon={CircleDashedIcon} className="size-10 text-muted" />
+        <CircleDashed className="size-10 text-muted" />
         <p className="text-foreground font-medium">Connect your Wallet</p>
         <p className="text-muted text-sm">Paste your Bearer token below to get started.</p>
       </div>
@@ -289,10 +299,10 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
               const highlighted = r.id === highlightedId;
-              const categoryIcon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
+              const Icon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
               const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
               const account = accounts.find((a) => a.id === r.accountId);
-              const accountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
+              const AccountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
               const accountColor = account?.color ?? "var(--muted-foreground)";
               const cleared = r.recordState === "cleared" || r.recordState === "reconciled";
 
@@ -305,7 +315,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                 >
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
-                      <HugeiconsIcon icon={categoryIcon} className="size-4" />
+                      <Icon className="size-4" />
                     </div>
                     {cleared && (
                       <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-success flex items-center justify-center">
@@ -325,7 +335,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   </div>
 
                   <div className="hidden sm:flex items-center gap-1.5 min-w-0 w-36 shrink-0">
-                    <HugeiconsIcon icon={accountIcon} className="size-3.5 shrink-0" style={{ color: accountColor }} />
+                    <AccountIcon weight="fill" className="size-3.5 shrink-0" style={{ color: accountColor }} />
                     <span className="text-sm text-muted truncate">{r.accountName}</span>
                   </div>
 
@@ -432,13 +442,13 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
             const used = Math.abs(Math.min(a.balance.currentBalance, 0));
             const limit = a.balance.creditLimit ?? 0;
             const pct = limit > 0 ? (used / limit) * 100 : 0;
-            const icon = getAccountIcon(a.accountType, a.name);
+            const Icon = getAccountIcon(a.accountType, a.name);
             const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
 
             return (
               <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
                 <div className="flex items-center gap-2.5">
-                  <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
                   <span className="text-sm font-medium text-foreground">{a.name}</span>
                 </div>
                 <CreditUsageBar pct={pct} />
@@ -491,12 +501,12 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
           <p className="text-xs font-semibold uppercase tracking-widest text-muted">Current Accounts</p>
 
           {currentAccounts.map((a) => {
-            const icon = getAccountIcon(a.accountType, a.name);
+            const Icon = getAccountIcon(a.accountType, a.name);
             const bal = a.balance.currentBalance;
             return (
               <div key={a.id} className="rounded-xl p-4 flex items-center justify-between" style={{ background: "hsl(240 3% 6%)" }}>
                 <div className="flex items-center gap-2.5">
-                  <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
+                  <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
                   <span className="text-sm font-medium text-foreground">{a.name}</span>
                 </div>
                 <span className={`text-sm font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
@@ -723,7 +733,7 @@ export default function Home() {
                       onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
                     >
-                      <HugeiconsIcon icon={LayoutListIcon} className="size-4 shrink-0" />
+                      <LayoutList className="size-4 shrink-0" />
                       <span className="font-medium">All Accounts</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -740,7 +750,7 @@ export default function Home() {
                       onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
                       size="lg"
                     >
-                      <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
+                      <Sparkles className="size-4 shrink-0" />
                       <span className="font-medium">Insights</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -775,7 +785,7 @@ export default function Home() {
                         onClick={(e) => e.stopPropagation()}
                         className="p-0.5 rounded text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors opacity-0 group-hover/label:opacity-100"
                       >
-                        <HugeiconsIcon icon={InformationCircleIcon} className="size-3" />
+                        <Info className="size-3" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
@@ -815,7 +825,7 @@ export default function Home() {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {accs.map((a) => {
-                      const icon = getAccountIcon(a.accountType, a.name);
+                      const Icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
                       const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
@@ -825,7 +835,7 @@ export default function Home() {
                               className="flex-1 flex items-center gap-2 min-w-0 text-left"
                               onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
                             >
-                              <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{a.name}</p>
                                 <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
@@ -839,14 +849,14 @@ export default function Home() {
                                   onClick={(e) => e.stopPropagation()}
                                   className={`shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors ${isActive ? "opacity-100" : "opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto"}`}
                                 >
-                                  <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
+                                  <Info className="size-3.5" />
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
                                 {/* Header */}
                                 <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-border">
                                   <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
-                                    <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                                    <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
@@ -985,7 +995,7 @@ export default function Home() {
 
               {/* Search bar */}
               <div className="relative flex items-center">
-                <HugeiconsIcon icon={Search01Icon} className="absolute left-3 size-3.5 text-muted pointer-events-none" />
+                <Search className="absolute left-3 size-3.5 text-muted pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search by note or payee…"
@@ -995,7 +1005,7 @@ export default function Home() {
                 />
                 {searchInput && (
                   <button onClick={() => { setSearchInput(""); setDebouncedSearch(""); }} className="absolute right-3 text-muted hover:text-foreground">
-                    <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+                    <X className="size-3.5" />
                   </button>
                 )}
               </div>

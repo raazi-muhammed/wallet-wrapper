@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Calendar03Icon } from "@hugeicons/core-free-icons";
+import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -48,7 +47,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
             className
           )}
         >
-          <HugeiconsIcon icon={Calendar03Icon} className="size-4 text-muted shrink-0" />
+          <CalendarIcon className="size-4 text-muted shrink-0" />
           <span>{format(value, "dd MMM yyyy, hh:mm a")}</span>
         </button>
       </PopoverTrigger>

@@ -83,7 +83,7 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
         + Add Record
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-[720px] w-full p-0 max-h-[90vh] overflow-hidden flex flex-col">
           <RecordForm
             mode="add"
             token={token}
@@ -220,7 +220,7 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-[720px] w-full p-0 overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-[720px] w-full p-0 max-h-[90vh] overflow-hidden flex flex-col">
         <RecordForm
           mode="add"
           initialRecord={record}
@@ -700,16 +700,16 @@ function RecordForm({
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
-      <DialogHeader className="px-4 sm:px-6 pt-6 pb-4">
+      <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 shrink-0">
         <DialogTitle className="text-base font-semibold text-foreground">
           {mode === "edit" ? "Edit record" : "Add record"}
         </DialogTitle>
       </DialogHeader>
 
       {/* Body */}
-      <div className="px-4 sm:px-6 py-5">
+      <div className="px-4 sm:px-6 py-5 flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column */}
           <div className="flex-1 space-y-4">
@@ -934,7 +934,7 @@ function RecordForm({
       </div>
 
       {/* Footer */}
-      <div className="px-4 sm:px-6 pb-6 pt-2 flex flex-col sm:flex-row gap-2">
+      <div className="px-4 sm:px-6 pb-6 pt-2 flex flex-col sm:flex-row gap-2 shrink-0">
         {mode === "add" && (
           <div className="grid grid-cols-2 gap-2 sm:contents">
             <Button

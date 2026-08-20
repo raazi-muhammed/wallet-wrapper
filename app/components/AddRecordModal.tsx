@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,9 +112,9 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   onDuplicate?: () => void;
 }) {
   const account = accounts.find((a) => a.id === record.accountId);
-  const AccountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
+  const accountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
   const accountColor = account?.color ?? "var(--muted-foreground)";
-  const CategoryIcon = getCategoryIcon(record.category?.name ?? "", record.category?.group?.name);
+  const categoryIcon = getCategoryIcon(record.category?.name ?? "", record.category?.group?.name);
 
   const positive = record.amount.value > 0;
   const recordType = record.recordType?.toLowerCase();
@@ -151,7 +152,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
           <DetailRow label="Category">
             <div className="flex items-center gap-2">
               <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <CategoryIcon className="size-3" />
+                <HugeiconsIcon icon={categoryIcon} className="size-3" />
               </div>
               <span className="text-sm">{record.category?.name ?? "—"}</span>
               {record.category?.group && (
@@ -162,7 +163,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
 
           <DetailRow label="Account">
             <div className="flex items-center gap-2">
-              <AccountIcon weight="fill" className="size-4 shrink-0" style={{ color: accountColor }} />
+              <HugeiconsIcon icon={accountIcon} className="size-4 shrink-0" style={{ color: accountColor }} />
               <span className="text-sm">{record.accountName}</span>
             </div>
           </DetailRow>
@@ -284,7 +285,7 @@ function AccountSelect({
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
-              {(() => { const Icon = getAccountIcon(selected.accountType, selected.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: selected.color ?? "var(--muted-foreground)" }} />; })()}
+              {(() => { const icon = getAccountIcon(selected.accountType, selected.name); return <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: selected.color ?? "var(--muted-foreground)" }} />; })()}
               <span className="truncate text-foreground">{selected.name}</span>
             </span>
           ) : (
@@ -318,7 +319,7 @@ function AccountSelect({
               onClick={() => select(a.id)}
               className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
             >
-              {(() => { const Icon = getAccountIcon(a.accountType, a.name); return <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />; })()}
+              {(() => { const icon = getAccountIcon(a.accountType, a.name); return <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />; })()}
               <span className="truncate">{a.name}</span>
             </button>
           ))}
@@ -383,11 +384,11 @@ function CategorySelect({
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
               {(() => {
-                const Icon = getCategoryIcon(selected.name, selected.group?.name);
+                const icon = getCategoryIcon(selected.name, selected.group?.name);
                 const color = selected.color ?? "#888";
                 return (
                   <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                    <Icon className="size-3" />
+                    <HugeiconsIcon icon={icon} className="size-3" />
                   </span>
                 );
               })()}
@@ -424,7 +425,7 @@ function CategorySelect({
                 <div className="flex-1 h-px bg-border" />
               </div>
               {items.map((c) => {
-                const Icon = getCategoryIcon(c.name, groupName);
+                const icon = getCategoryIcon(c.name, groupName);
                 const color = c.color ?? "#888";
                 return (
                   <button
@@ -434,7 +435,7 @@ function CategorySelect({
                     className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
                   >
                     <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                      <Icon className="size-3" />
+                      <HugeiconsIcon icon={icon} className="size-3" />
                     </span>
                     <span className="truncate">{c.name}</span>
                   </button>
@@ -443,7 +444,7 @@ function CategorySelect({
             </div>
           ))}
           {ungrouped.map((c) => {
-            const Icon = getCategoryIcon(c.name);
+            const icon = getCategoryIcon(c.name);
             const color = c.color ?? "#888";
             return (
               <button
@@ -453,7 +454,7 @@ function CategorySelect({
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
               >
                 <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                  <Icon className="size-3" />
+                  <HugeiconsIcon icon={icon} className="size-3" />
                 </span>
                 <span className="truncate">{c.name}</span>
               </button>
@@ -962,7 +963,7 @@ function RecordForm({
         >
           {submitting ? (
             <span className="flex items-center gap-2">
-              <Loader2 className="size-4 animate-spin" /> Saving…
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" /> Saving…
             </span>
           ) : (
             mode === "edit" ? "Save changes" : "Add record"

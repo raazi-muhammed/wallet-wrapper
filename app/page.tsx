@@ -142,7 +142,7 @@ function SettingsPopover({
               <button
                 onClick={() => handleSaveAndClose(draft)}
                 disabled={!draft}
-                className="flex-1 py-2 rounded-lg bg-accent text-accent-foreground text-xs font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
+                className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
               >
                 Connect
               </button>
@@ -226,7 +226,7 @@ function TokenConnectForm({ onSave }: { onSave: (t: string) => void }) {
         <button
           onClick={() => onSave(draft)}
           disabled={!draft}
-          className="w-full py-2 rounded-lg bg-accent text-accent-foreground text-sm font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
+          className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
         >
           Connect
         </button>

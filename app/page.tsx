@@ -288,7 +288,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
           <div key={date} className="rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 bg-background">
+            <div className="flex items-center justify-between px-4 py-2 bg-default">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
@@ -376,7 +376,7 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
     <div className="space-y-3">
       {counts.map((count, gi) => (
         <div key={gi} className="rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-background">
+          <div className="flex items-center justify-between px-4 py-2 bg-default">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>

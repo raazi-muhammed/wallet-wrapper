@@ -288,7 +288,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
           <div key={date}>
-            <div className="flex items-center justify-between px-4 py-2 bg-default">
+            <div className="flex items-center justify-between px-4 py-2 bg-background">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
@@ -311,7 +311,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   key={r.id}
                   data-record-id={r.id}
                   onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-default transition-colors ${rowIndex % 2 === 1 ? "bg-secondary" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-default transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
@@ -383,7 +383,7 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
           {[...Array(count)].map((_, i) => {
             rowIndex++;
             return (
-              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-secondary" : ""}`}>
+              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"}`}>
                 <Skeleton className="size-9 rounded-full shrink-0" />
                 <div className="w-40 shrink-0 space-y-1.5">
                   <Skeleton className="h-3.5 w-3/4" />

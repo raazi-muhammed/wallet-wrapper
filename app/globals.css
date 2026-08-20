@@ -35,6 +35,8 @@
   /* ── Card / secondary ──────────────────────── */
   --color-card:             hsl(240 9% 9%);
   --color-card-foreground:  hsl(0 0% 98%);
+  --color-card-2:           hsl(240 8% 7%);
+  --color-card-2-foreground: hsl(0 0% 98%);
   --color-secondary:        hsl(240 6% 6%);
   --color-secondary-foreground: hsl(0 0% 98%);
 

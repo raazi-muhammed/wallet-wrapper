@@ -133,7 +133,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-sm w-full p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base">Record Details</DialogTitle>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -147,7 +147,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
           </p>
         </DialogHeader>
 
-        <div className="px-6 py-5 space-y-3.5">
+        <div className="px-4 sm:px-6 py-5 space-y-3.5">
           <DetailRow label="Category">
             <div className="flex items-center gap-2">
               <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
@@ -193,7 +193,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
         </div>
 
         {onDuplicate && (
-          <div className="px-6 pb-5">
+          <div className="px-4 sm:px-6 pb-5">
             <button
               onClick={() => { onClose(); onDuplicate(); }}
               className="w-full py-2 rounded-xl border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
@@ -702,14 +702,14 @@ function RecordForm({
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <DialogHeader className="px-6 pt-6 pb-4">
+      <DialogHeader className="px-4 sm:px-6 pt-6 pb-4">
         <DialogTitle className="text-base font-semibold text-foreground">
           {mode === "edit" ? "Edit record" : "Add record"}
         </DialogTitle>
       </DialogHeader>
 
       {/* Body */}
-      <div className="px-6 py-5">
+      <div className="px-4 sm:px-6 py-5">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column */}
           <div className="flex-1 space-y-4">
@@ -934,12 +934,12 @@ function RecordForm({
       </div>
 
       {/* Footer */}
-      <div className="px-6 pb-6 pt-2 flex gap-2">
+      <div className="px-4 sm:px-6 pb-6 pt-2 flex flex-col sm:flex-row gap-2">
         {mode === "add" && (
-          <>
+          <div className="grid grid-cols-2 gap-2 sm:contents">
             <Button
               variant="outline"
-              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              className="sm:flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
               onClick={() => submit(true)}
               disabled={amount === undefined || !accountId || submitting}
             >
@@ -947,16 +947,16 @@ function RecordForm({
             </Button>
             <Button
               variant="outline"
-              className="flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              className="sm:flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
               onClick={() => submit("sameDate")}
               disabled={amount === undefined || !accountId || submitting}
             >
               Add, keep date
             </Button>
-          </>
+          </div>
         )}
         <Button
-          className={mode === "add" ? "flex-1" : "w-full"}
+          className={mode === "add" ? "sm:flex-1" : "w-full"}
           onClick={() => submit(false)}
           disabled={amount === undefined || !accountId || submitting}
         >

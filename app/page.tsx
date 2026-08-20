@@ -47,6 +47,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -122,7 +123,7 @@ function SettingsPopover({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed top-4 right-4 z-50 w-80 rounded-xl shadow-lg space-y-4 p-4" style={{ background: "#0F0F0F" }}>
+          <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 sm:w-80 rounded-xl shadow-lg space-y-4 p-4" style={{ background: "#0F0F0F" }}>
             <p className="text-sm font-semibold text-foreground">API Connection</p>
 
             <div className="space-y-1.5">
@@ -278,21 +279,23 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
   }
 
   const groups = groupByDate(records);
+  let rowIndex = -1;
 
   return (
-    <div className="space-y-0 rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+    <div className="space-y-0 rounded-xl overflow-hidden bg-card">
       {groups.map(({ date, records: dayRecords }) => {
         const currency = dayRecords[0]?.amount.currencyCode;
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
           <div key={date}>
-            <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+            <div className="flex items-center justify-between px-4 py-2 bg-default">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
               </span>
             </div>
             {dayRecords.map((r) => {
+              rowIndex++;
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
               const highlighted = r.id === highlightedId;
@@ -308,7 +311,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   key={r.id}
                   data-record-id={r.id}
                   onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-t border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] transition-colors ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-default transition-colors ${rowIndex % 2 === 1 ? "bg-secondary" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
@@ -323,17 +326,20 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                     )}
                   </div>
 
-                  <div className="min-w-0 w-40 shrink-0">
+                  <div className="min-w-0 flex-1 sm:w-40 sm:flex-none">
                     <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
-                    {r.counterParty && <p className="text-xs text-muted truncate">{r.counterParty}</p>}
+                    <p className="text-xs text-muted truncate sm:hidden">
+                      {r.accountName}{r.counterParty ? ` · ${r.counterParty}` : ""}
+                    </p>
+                    {r.counterParty && <p className="hidden sm:block text-xs text-muted truncate">{r.counterParty}</p>}
                   </div>
 
-                  <div className="flex items-center gap-1.5 min-w-0 w-36 shrink-0">
+                  <div className="hidden sm:flex items-center gap-1.5 min-w-0 w-36 shrink-0">
                     <AccountIcon weight="fill" className="size-3.5 shrink-0" style={{ color: accountColor }} />
                     <span className="text-sm text-muted truncate">{r.accountName}</span>
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <div className="hidden md:block flex-1 min-w-0">
                     <span className="text-sm text-muted truncate block">{r.note ?? ""}</span>
                   </div>
 
@@ -365,33 +371,37 @@ function periodFrom(period: "3m" | "6m" | "1y" | "all") {
 // ── Skeleton rows ─────────────────────────────────────────────────────────────
 
 function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
+  let rowIndex = -1;
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "hsl(240 3% 6%)" }}>
+    <div className="rounded-xl overflow-hidden bg-card">
       {counts.map((count, gi) => (
         <div key={gi}>
-          <div className="flex items-center justify-between px-4 py-2 bg-white/[0.04]">
+          <div className="flex items-center justify-between px-4 py-2 bg-secondary">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>
-          {[...Array(count)].map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-4 py-3 border-t border-white/[0.04] bg-white/[0.03]">
-              <Skeleton className="size-9 rounded-full shrink-0" />
-              <div className="w-40 shrink-0 space-y-1.5">
-                <Skeleton className="h-3.5 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
+          {[...Array(count)].map((_, i) => {
+            rowIndex++;
+            return (
+              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-secondary" : ""}`}>
+                <Skeleton className="size-9 rounded-full shrink-0" />
+                <div className="w-40 shrink-0 space-y-1.5">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+                <div className="w-36 shrink-0">
+                  <Skeleton className="h-3.5 w-4/5" />
+                </div>
+                <div className="flex-1">
+                  <Skeleton className="h-3.5 w-2/3" />
+                </div>
+                <div className="shrink-0 space-y-1.5 text-right">
+                  <Skeleton className="h-3.5 w-16 ml-auto" />
+                  <Skeleton className="h-3 w-10 ml-auto" />
+                </div>
               </div>
-              <div className="w-36 shrink-0">
-                <Skeleton className="h-3.5 w-4/5" />
-              </div>
-              <div className="flex-1">
-                <Skeleton className="h-3.5 w-2/3" />
-              </div>
-              <div className="shrink-0 space-y-1.5 text-right">
-                <Skeleton className="h-3.5 w-16 ml-auto" />
-                <Skeleton className="h-3 w-10 ml-auto" />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>
@@ -403,7 +413,7 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
 function CreditUsageBar({ pct }: { pct: number }) {
   const color = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
   return (
-    <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+    <div className="h-1.5 rounded-full bg-default overflow-hidden">
       <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
     </div>
   );
@@ -461,7 +471,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
           })}
 
           {creditCards.length > 1 && (
-            <div className="rounded-xl p-4 space-y-3 border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+            <div className="rounded-xl p-4 space-y-3 border border-border" style={{ background: "hsl(240 3% 8%)" }}>
               <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
               <CreditUsageBar pct={totalPct} />
               <div className="flex items-center justify-between text-xs">
@@ -507,7 +517,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
           })}
 
           {currentAccounts.length > 1 && (
-            <div className="rounded-xl p-4 flex items-center justify-between border border-white/[0.06]" style={{ background: "hsl(240 3% 8%)" }}>
+            <div className="rounded-xl p-4 flex items-center justify-between border border-border" style={{ background: "hsl(240 3% 8%)" }}>
               <span className="text-xs font-semibold text-muted uppercase tracking-widest">Total</span>
               <span className={`text-sm font-semibold tabular-nums ${currentAccountsTotal < 0 ? "text-danger" : "text-foreground"}`}>
                 {fmt(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}
@@ -668,7 +678,7 @@ export default function Home() {
     <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
       {/* Sidebar */}
       {initialLoading ? (
-        <Sidebar variant="floating">
+        <Sidebar variant="sidebar">
           <SidebarHeader className="px-4 pt-4 pb-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
           </SidebarHeader>
@@ -779,23 +789,23 @@ export default function Home() {
                       </button>
                     </PopoverTrigger>
                     <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
-                      <div className="px-3 pt-3 pb-2 border-b border-white/[0.06]">
+                      <div className="px-3 pt-3 pb-2 border-b border-border">
                         <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
                       </div>
                       <div className="p-3 space-y-2">
-                        <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                        <div className="rounded-xl bg-card px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                           <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
                             {fmt(totalBal, currency)}
                           </p>
                         </div>
                         {isCreditCard && totalLimit > 0 && (
-                          <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                          <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted">Limit</span>
                               <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
                             </div>
-                            <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                            <div className="h-1 rounded-full bg-default overflow-hidden">
                               <div className={`h-full rounded-full ${totalPct >= 90 ? "bg-danger" : totalPct >= 70 ? "bg-warning" : "bg-success"}`} style={{ width: `${Math.min(totalPct, 100)}%` }} />
                             </div>
                             <div className="flex items-center justify-between text-xs">
@@ -844,7 +854,7 @@ export default function Home() {
                               </PopoverTrigger>
                               <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
                                 {/* Header */}
-                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-white/[0.06]">
+                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-border">
                                   <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
                                     <Icon weight="fill" className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                                   </div>
@@ -857,7 +867,7 @@ export default function Home() {
                                 {/* Stats grid */}
                                 <div className="p-3 space-y-2">
                                   {/* Balance — full width */}
-                                  <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                                  <div className="rounded-xl bg-card px-3 py-2.5">
                                     <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                                     <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
                                       {fmt(bal, a.balance.currencyCode)}
@@ -871,12 +881,12 @@ export default function Home() {
                                     const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
                                     const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
                                     return (
-                                      <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 space-y-2">
+                                      <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
                                         <div className="flex items-center justify-between text-xs">
                                           <span className="text-muted">Limit</span>
                                           <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
                                         </div>
-                                        <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                                        <div className="h-1 rounded-full bg-default overflow-hidden">
                                           <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                                         </div>
                                         <div className="flex items-center justify-between text-xs">
@@ -910,6 +920,12 @@ export default function Home() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {token && (
+          <div className="md:hidden flex items-center gap-3 px-4 h-14 shrink-0 border-b border-border">
+            <SidebarTrigger />
+            <span className="text-sm font-semibold text-foreground">Wallet</span>
+          </div>
+        )}
         <main ref={recordsSectionRef} className="flex-1 overflow-y-auto">
 
           {!token && <TokenConnectForm onSave={handleSave} />}
@@ -931,8 +947,8 @@ export default function Home() {
               <RecordsSkeleton counts={[3, 2, 4]} />
             </div>
           ) : (activeAccounts.length > 0 || records.length > 0) ? (
-            <div className="px-6 py-6 space-y-4">
-              <div className="flex items-center justify-between gap-4">
+            <div className="px-4 sm:px-6 py-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
                   {isSearching && (
@@ -943,13 +959,13 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {!isSearching && (
-                    <div className="flex items-center gap-0.5 rounded-full bg-white/[0.06] p-0.5">
+                    <div className="flex items-center gap-0.5 rounded-full bg-default p-0.5">
                       {(["3m", "6m", "1y", "all"] as const).map((p) => (
                         <button
                           key={p}
                           onClick={() => setPeriod(p)}
                           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                            period === p ? "bg-white/[0.12] text-foreground" : "text-muted hover:text-foreground"
+                            period === p ? "bg-default-hover text-foreground" : "text-muted hover:text-foreground"
                           }`}
                         >
                           {p === "3m" ? "3M" : p === "6m" ? "6M" : p === "1y" ? "1Y" : "All"}
@@ -985,7 +1001,7 @@ export default function Home() {
                   placeholder="Search by note or payee…"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-white/[0.05] text-foreground placeholder:text-muted focus:outline-none focus:bg-white/[0.09] transition-colors"
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-default text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
                 />
                 {searchInput && (
                   <button onClick={() => { setSearchInput(""); setDebouncedSearch(""); }} className="absolute right-3 text-muted hover:text-foreground">
@@ -1010,7 +1026,7 @@ export default function Home() {
                   <button
                     onClick={() => fetchNextPage()}
                     disabled={isFetchingNextPage}
-                    className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-foreground hover:bg-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isFetchingNextPage ? "Loading…" : "Load more"}
                   </button>

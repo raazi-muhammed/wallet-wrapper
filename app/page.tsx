@@ -282,12 +282,12 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
   let rowIndex = -1;
 
   return (
-    <div className="space-y-0 rounded-xl overflow-hidden bg-card">
+    <div className="space-y-3">
       {groups.map(({ date, records: dayRecords }) => {
         const currency = dayRecords[0]?.amount.currencyCode;
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
-          <div key={date}>
+          <div key={date} className="rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 bg-background">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
@@ -373,10 +373,10 @@ function periodFrom(period: "3m" | "6m" | "1y" | "all") {
 function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
   let rowIndex = -1;
   return (
-    <div className="rounded-xl overflow-hidden bg-card">
+    <div className="space-y-3">
       {counts.map((count, gi) => (
-        <div key={gi}>
-          <div className="flex items-center justify-between px-4 py-2 bg-secondary">
+        <div key={gi} className="rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-background">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>

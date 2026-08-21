@@ -40,6 +40,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -277,15 +278,17 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
         const currency = dayRecords[0]?.amount.currencyCode;
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
-          <div key={date} className="rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 bg-default">
+          <div key={date}>
+            <div className="flex items-center justify-between px-4 py-2 bg-background">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
               </span>
             </div>
-            {dayRecords.map((r) => {
+            {dayRecords.map((r, i) => {
               rowIndex++;
+              const isFirst = i === 0;
+              const isLast = i === dayRecords.length - 1;
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
               const highlighted = r.id === highlightedId;
@@ -301,7 +304,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   key={r.id}
                   data-record-id={r.id}
                   onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-default transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
@@ -365,15 +368,17 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
   return (
     <div className="space-y-3">
       {counts.map((count, gi) => (
-        <div key={gi} className="rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-default">
+        <div key={gi}>
+          <div className="flex items-center justify-between px-4 py-2 bg-background">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>
           {[...Array(count)].map((_, i) => {
             rowIndex++;
+            const isFirst = i === 0;
+            const isLast = i === count - 1;
             return (
-              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"}`}>
+              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""}`}>
                 <Skeleton className="size-9 rounded-full shrink-0" />
                 <div className="w-40 shrink-0 space-y-1.5">
                   <Skeleton className="h-3.5 w-3/4" />
@@ -421,7 +426,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
 
   return (
     <div className="px-6 py-6 space-y-6">
-      <h2 className="text-base font-semibold text-foreground">Insights</h2>
+      <h2 className="font-display text-base font-semibold text-foreground">Insights</h2>
 
       {/* Credit Cards section */}
       {creditCards.length > 0 && (
@@ -670,7 +675,7 @@ export default function Home() {
       {initialLoading ? (
         <Sidebar variant="sidebar">
           <SidebarHeader className="px-4 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+            <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup className="pt-0">
@@ -711,34 +716,29 @@ export default function Home() {
       ) : activeAccounts.length > 0 ? (
         <Sidebar variant="floating">
           <SidebarHeader className="px-4 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+            <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup className="pt-0">
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={selectedAccount === "all" && activeView === "accounts"}
                       onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
+                      className="rounded-none px-3"
                     >
                       <HugeiconsIcon icon={LayoutListIcon} className="size-4 shrink-0" />
                       <span className="font-medium">All Accounts</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            <SidebarGroup className="pt-0">
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
+                  <SidebarMenuItem className="before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator">
                     <SidebarMenuButton
                       isActive={activeView === "insights"}
                       onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
                       size="lg"
+                      className="rounded-none px-3"
                     >
                       <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
                       <span className="font-medium">Insights</span>
@@ -767,7 +767,7 @@ export default function Home() {
               const currency = accs[0]?.balance.currencyCode;
               return (
               <SidebarGroup key={type} className="pt-0">
-                <SidebarGroupLabel className="group/label text-[10px] uppercase tracking-widest px-2 flex items-center justify-between">
+                <SidebarGroupLabel className="group/label text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2 flex items-center justify-between">
                   <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -778,19 +778,19 @@ export default function Home() {
                         <HugeiconsIcon icon={InformationCircleIcon} className="size-3" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
-                      <div className="px-3 pt-3 pb-2 border-b border-border">
+                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
+                      <div className="px-3 pt-3 pb-2">
                         <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
                       </div>
-                      <div className="p-3 space-y-2">
-                        <div className="rounded-xl bg-card px-3 py-2.5">
+                      <div className="px-3 pb-3 pt-0 space-y-2">
+                        <div className="rounded-lg bg-card px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                           <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
                             {fmt(totalBal, currency)}
                           </p>
                         </div>
                         {isCreditCard && totalLimit > 0 && (
-                          <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
+                          <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted">Limit</span>
                               <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
@@ -813,19 +813,21 @@ export default function Home() {
                   </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <SidebarMenu>
-                    {accs.map((a) => {
+                  <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
+                    {accs.map((a, idx) => {
                       const icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
                       const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
-                        <SidebarMenuItem key={a.id}>
-                          <div className={`group/row flex items-center gap-1 rounded-lg px-2 py-2 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
+                        <SidebarMenuItem key={a.id} className={idx > 0 ? "before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator" : ""}>
+                          <div className={`group/row relative flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent/10 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-0.5 before:rounded-full before:bg-sidebar-primary" : "hover:bg-sidebar-accent/10"}`}>
                             <button
-                              className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                              className="flex-1 flex items-center gap-2.5 min-w-0 text-left"
                               onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
                             >
-                              <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              <div className="size-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
+                                <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{a.name}</p>
                                 <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
@@ -842,9 +844,9 @@ export default function Home() {
                                   <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
                                 {/* Header */}
-                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-border">
+                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
                                   <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
                                     <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                                   </div>
@@ -855,9 +857,9 @@ export default function Home() {
                                 </div>
 
                                 {/* Stats grid */}
-                                <div className="p-3 space-y-2">
+                                <div className="px-3 pb-3 pt-0 space-y-2">
                                   {/* Balance — full width */}
-                                  <div className="rounded-xl bg-card px-3 py-2.5">
+                                  <div className="rounded-lg bg-card px-3 py-2.5">
                                     <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                                     <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
                                       {fmt(bal, a.balance.currencyCode)}
@@ -871,7 +873,7 @@ export default function Home() {
                                     const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
                                     const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
                                     return (
-                                      <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
+                                      <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
                                         <div className="flex items-center justify-between text-xs">
                                           <span className="text-muted">Limit</span>
                                           <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
@@ -940,7 +942,7 @@ export default function Home() {
             <div className="px-4 sm:px-6 py-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
+                  <h2 className="font-display text-base font-semibold text-foreground">{selectedAccountName}</h2>
                   {isSearching && (
                     <p className="text-xs text-muted mt-0.5">
                       {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"`}
@@ -986,12 +988,12 @@ export default function Home() {
               {/* Search bar */}
               <div className="relative flex items-center">
                 <HugeiconsIcon icon={Search01Icon} className="absolute left-3 size-3.5 text-muted pointer-events-none" />
-                <input
+                <Input
                   type="text"
                   placeholder="Search by note or payee…"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-default text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
                 />
                 {searchInput && (
                   <button onClick={() => { setSearchInput(""); setDebouncedSearch(""); }} className="absolute right-3 text-muted hover:text-foreground">

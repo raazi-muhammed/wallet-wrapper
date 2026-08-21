@@ -197,7 +197,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
           <div className="px-4 sm:px-6 pb-5">
             <button
               onClick={() => { onClose(); onDuplicate(); }}
-              className="w-full py-2 rounded-xl border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
+              className="w-full py-2 rounded-lg border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
             >
               Duplicate record
             </button>
@@ -281,7 +281,7 @@ function AccountSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
@@ -297,7 +297,7 @@ function AccountSelect({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto overflow-hidden"
+        className="p-0 border-0 bg-card w-[var(--radix-popover-trigger-width)] pointer-events-auto overflow-hidden"
         style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
         align="start"
         sideOffset={4}
@@ -308,7 +308,7 @@ function AccountSelect({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search accounts…"
-            className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+            className="w-full rounded-lg border-0 bg-card text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
           />
         </div>
         <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
@@ -379,7 +379,7 @@ function CategorySelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="w-full h-10 flex items-center justify-between gap-2 rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
@@ -403,7 +403,7 @@ function CategorySelect({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 border-0 bg-[#1F1F1E] w-[var(--radix-popover-trigger-width)] pointer-events-auto"
+        className="p-0 border-0 bg-card w-[var(--radix-popover-trigger-width)] pointer-events-auto"
         style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
         align="start"
         sideOffset={4}
@@ -414,7 +414,7 @@ function CategorySelect({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search categories…"
-            className="w-full rounded-lg border-0 bg-[#1F1F1E] text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-lg border-0 bg-card text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
         <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
@@ -715,7 +715,7 @@ function RecordForm({
           {/* Left column */}
           <div className="flex-1 space-y-4">
             <Tabs value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
-              <TabsList className="bg-[#1F1F1E] w-full">
+              <TabsList className="bg-card w-full">
                 <TabsTrigger
                   value="expense"
                   className="flex-1 data-[state=active]:bg-danger data-[state=active]:text-white"
@@ -739,7 +739,7 @@ function RecordForm({
                 Amount <span className="text-danger">*</span>
               </label>
               <div className="flex gap-2">
-                <div className="flex flex-1 rounded-xl border-0 bg-[#1F1F1E] overflow-hidden">
+                <div className="flex flex-1 rounded-lg border-0 bg-card overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setAmount((v) => Math.max(0, (v ?? 0) - 1))}
@@ -765,7 +765,7 @@ function RecordForm({
                     +
                   </button>
                 </div>
-                <div className="w-20 flex items-center justify-center rounded-xl border-0 bg-[#1F1F1E] px-3 text-sm font-mono text-muted">
+                <div className="w-20 flex items-center justify-center rounded-lg border-0 bg-card px-3 text-sm font-mono text-muted">
                   {currencyCode}
                 </div>
               </div>
@@ -802,14 +802,14 @@ function RecordForm({
                 <button
                   type="button"
                   onClick={setDateToday}
-                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-[#1F1F1E] text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={setDateYesterday}
-                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-[#1F1F1E] text-muted hover:text-foreground hover:bg-default transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
                 >
                   Yesterday
                 </button>
@@ -831,10 +831,10 @@ function RecordForm({
                 aria-autocomplete="list"
                 aria-expanded={showSuggestions && suggestions.length > 0}
                 rows={3}
-                className="text-foreground placeholder:text-muted rounded-xl resize-none"
+                className="text-foreground placeholder:text-muted rounded-lg resize-none"
               />
               {showSuggestions && suggestions.length > 0 && (
-                <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border-0 bg-[#1F1F1E] shadow-lg overflow-hidden">
+                <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border-0 bg-card shadow-lg overflow-hidden">
                   {suggestions.map((r) => {
                     const positive = r.amount.value > 0;
                     return (
@@ -875,10 +875,10 @@ function RecordForm({
                 aria-label="Payer"
                 aria-autocomplete="list"
                 aria-expanded={showPayerSuggestions && apiPayerSuggestions.length > 0}
-                className="text-foreground placeholder:text-muted rounded-xl"
+                className="text-foreground placeholder:text-muted rounded-lg"
               />
               {showPayerSuggestions && apiPayerSuggestions.length > 0 && (
-                <div onMouseDown={handlePayerSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border-0 bg-[#1F1F1E] shadow-lg overflow-hidden">
+                <div onMouseDown={handlePayerSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border-0 bg-card shadow-lg overflow-hidden">
                   {apiPayerSuggestions.map((name) => (
                     <button
                       key={name}
@@ -896,7 +896,7 @@ function RecordForm({
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
               <Select value={paymentType} onValueChange={(v) => setPaymentType(v as typeof paymentType)}>
-                <SelectTrigger className="w-full rounded-xl">
+                <SelectTrigger className="w-full rounded-lg">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -912,7 +912,7 @@ function RecordForm({
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
               <Select value={recordState} onValueChange={(v) => setRecordState(v as typeof recordState)}>
-                <SelectTrigger className="w-full rounded-xl">
+                <SelectTrigger className="w-full rounded-lg">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -928,7 +928,7 @@ function RecordForm({
         </div>
 
         {error && (
-          <div className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
+          <div className="mt-4 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
             {error}
           </div>
         )}
@@ -939,16 +939,16 @@ function RecordForm({
         {mode === "add" && (
           <div className="grid grid-cols-2 gap-2 sm:contents">
             <Button
-              variant="outline"
-              className="sm:flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              variant="card"
+              className="sm:flex-1"
               onClick={() => submit(true)}
               disabled={amount === undefined || !accountId || submitting}
             >
               Add another
             </Button>
             <Button
-              variant="outline"
-              className="sm:flex-1 border-border text-foreground hover:bg-default hover:text-foreground"
+              variant="card"
+              className="sm:flex-1"
               onClick={() => submit("sameDate")}
               disabled={amount === undefined || !accountId || submitting}
             >

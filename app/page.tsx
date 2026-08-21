@@ -426,7 +426,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
 
   return (
     <div className="px-6 py-6 space-y-6">
-      <h2 className="text-base font-semibold text-foreground">Insights</h2>
+      <h2 className="font-display text-base font-semibold text-foreground">Insights</h2>
 
       {/* Credit Cards section */}
       {creditCards.length > 0 && (
@@ -675,7 +675,7 @@ export default function Home() {
       {initialLoading ? (
         <Sidebar variant="sidebar">
           <SidebarHeader className="px-4 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+            <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup className="pt-0">
@@ -716,7 +716,7 @@ export default function Home() {
       ) : activeAccounts.length > 0 ? (
         <Sidebar variant="floating">
           <SidebarHeader className="px-4 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/50">Accounts</p>
+            <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup className="pt-0">
@@ -767,7 +767,7 @@ export default function Home() {
               const currency = accs[0]?.balance.currencyCode;
               return (
               <SidebarGroup key={type} className="pt-0">
-                <SidebarGroupLabel className="group/label text-[10px] tracking-widest px-2 flex items-center justify-between">
+                <SidebarGroupLabel className="group/label text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2 flex items-center justify-between">
                   <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -778,19 +778,19 @@ export default function Home() {
                         <HugeiconsIcon icon={InformationCircleIcon} className="size-3" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
-                      <div className="px-3 pt-3 pb-2 border-b border-border">
+                    <PopoverContent side="right" align="start" className="w-52 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
+                      <div className="px-3 pt-3 pb-2">
                         <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
                       </div>
-                      <div className="p-3 space-y-2">
-                        <div className="rounded-xl bg-card px-3 py-2.5">
+                      <div className="px-3 pb-3 pt-0 space-y-2">
+                        <div className="rounded-lg bg-card px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                           <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
                             {fmt(totalBal, currency)}
                           </p>
                         </div>
                         {isCreditCard && totalLimit > 0 && (
-                          <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
+                          <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted">Limit</span>
                               <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
@@ -844,9 +844,9 @@ export default function Home() {
                                   <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-2xl border-border bg-[#1a1a1a] overflow-hidden">
+                              <PopoverContent side="right" align="start" className="w-60 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
                                 {/* Header */}
-                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-border">
+                                <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
                                   <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
                                     <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
                                   </div>
@@ -857,9 +857,9 @@ export default function Home() {
                                 </div>
 
                                 {/* Stats grid */}
-                                <div className="p-3 space-y-2">
+                                <div className="px-3 pb-3 pt-0 space-y-2">
                                   {/* Balance — full width */}
-                                  <div className="rounded-xl bg-card px-3 py-2.5">
+                                  <div className="rounded-lg bg-card px-3 py-2.5">
                                     <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
                                     <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
                                       {fmt(bal, a.balance.currencyCode)}
@@ -873,7 +873,7 @@ export default function Home() {
                                     const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
                                     const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
                                     return (
-                                      <div className="rounded-xl bg-card px-3 py-2.5 space-y-2">
+                                      <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
                                         <div className="flex items-center justify-between text-xs">
                                           <span className="text-muted">Limit</span>
                                           <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
@@ -942,7 +942,7 @@ export default function Home() {
             <div className="px-4 sm:px-6 py-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">{selectedAccountName}</h2>
+                  <h2 className="font-display text-base font-semibold text-foreground">{selectedAccountName}</h2>
                   {isSearching && (
                     <p className="text-xs text-muted mt-0.5">
                       {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"`}

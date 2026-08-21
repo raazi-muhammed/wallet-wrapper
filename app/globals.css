@@ -5,6 +5,7 @@
 @theme inline {
   --font-sans: var(--font-inter);
   --font-mono: var(--font-fira-code);
+  --font-display: var(--font-fira-code);
 
   /* ── Core surfaces ─────────────────────────── */
   --color-background:      hsl(240 4% 5%);

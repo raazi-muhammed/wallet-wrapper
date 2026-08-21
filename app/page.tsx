@@ -721,7 +721,7 @@ export default function Home() {
           <SidebarContent>
             <SidebarGroup className="pt-0">
               <SidebarGroupContent>
-                <SidebarMenu className="gap-0 divide-y divide-separator rounded-lg overflow-hidden bg-card">
+                <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={selectedAccount === "all" && activeView === "accounts"}
@@ -733,7 +733,7 @@ export default function Home() {
                       <span className="font-medium">All Accounts</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  <SidebarMenuItem>
+                  <SidebarMenuItem className="before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator">
                     <SidebarMenuButton
                       isActive={activeView === "insights"}
                       onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
@@ -767,7 +767,7 @@ export default function Home() {
               const currency = accs[0]?.balance.currencyCode;
               return (
               <SidebarGroup key={type} className="pt-0">
-                <SidebarGroupLabel className="group/label text-[10px] uppercase tracking-widest px-2 flex items-center justify-between">
+                <SidebarGroupLabel className="group/label text-[10px] tracking-widest px-2 flex items-center justify-between">
                   <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -813,14 +813,14 @@ export default function Home() {
                   </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <SidebarMenu className="gap-0 divide-y divide-separator rounded-lg overflow-hidden bg-card">
-                    {accs.map((a) => {
+                  <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
+                    {accs.map((a, idx) => {
                       const icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
                       const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
-                        <SidebarMenuItem key={a.id}>
-                          <div className={`group/row flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
+                        <SidebarMenuItem key={a.id} className={idx > 0 ? "before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator" : ""}>
+                          <div className={`group/row relative flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent/10 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-0.5 before:rounded-full before:bg-sidebar-primary" : "hover:bg-sidebar-accent/10"}`}>
                             <button
                               className="flex-1 flex items-center gap-2.5 min-w-0 text-left"
                               onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}

@@ -721,29 +721,24 @@ export default function Home() {
           <SidebarContent>
             <SidebarGroup className="pt-0">
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-0 divide-y divide-separator rounded-lg overflow-hidden bg-card">
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={selectedAccount === "all" && activeView === "accounts"}
                       onClick={() => { setSelectedAccount("all"); setActiveView("accounts"); }}
                       size="lg"
+                      className="rounded-none px-3"
                     >
                       <HugeiconsIcon icon={LayoutListIcon} className="size-4 shrink-0" />
                       <span className="font-medium">All Accounts</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            <SidebarGroup className="pt-0">
-              <SidebarGroupContent>
-                <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={activeView === "insights"}
                       onClick={() => setActiveView(activeView === "insights" ? "accounts" : "insights")}
                       size="lg"
+                      className="rounded-none px-3"
                     >
                       <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
                       <span className="font-medium">Insights</span>
@@ -818,14 +813,14 @@ export default function Home() {
                   </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <SidebarMenu className="gap-2">
+                  <SidebarMenu className="gap-0 divide-y divide-separator rounded-lg overflow-hidden bg-card">
                     {accs.map((a) => {
                       const icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
                       const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
                         <SidebarMenuItem key={a.id}>
-                          <div className={`group/row flex items-center gap-1 rounded-2xl px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "bg-card hover:bg-sidebar-accent/50"}`}>
+                          <div className={`group/row flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
                             <button
                               className="flex-1 flex items-center gap-2.5 min-w-0 text-left"
                               onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}

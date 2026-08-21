@@ -44,7 +44,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
         <button
           type="button"
           className={cn(
-            "w-full flex items-center gap-2 rounded-xl bg-[#1F1F1E] px-3 py-2.5 text-sm text-left text-foreground focus:outline-none focus:ring-2 focus:ring-accent",
+            "w-full flex items-center gap-2 rounded-lg bg-card px-3 py-2.5 text-sm text-left text-foreground focus:outline-none focus:ring-2 focus:ring-accent",
             className
           )}
         >
@@ -53,7 +53,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-auto p-0 border-0 bg-[#1F1F1E] shadow-xl"
+        className="w-auto p-0 border-0 bg-card shadow-xl"
         align="start"
         sideOffset={4}
       >

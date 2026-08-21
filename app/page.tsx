@@ -40,6 +40,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -277,15 +278,17 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
         const currency = dayRecords[0]?.amount.currencyCode;
         const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
         return (
-          <div key={date} className="rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 bg-default">
+          <div key={date}>
+            <div className="flex items-center justify-between px-4 py-2 bg-background">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
               <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
               </span>
             </div>
-            {dayRecords.map((r) => {
+            {dayRecords.map((r, i) => {
               rowIndex++;
+              const isFirst = i === 0;
+              const isLast = i === dayRecords.length - 1;
               const { value, currencyCode } = r.amount;
               const positive = value > 0;
               const highlighted = r.id === highlightedId;
@@ -301,7 +304,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                   key={r.id}
                   data-record-id={r.id}
                   onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-default transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
@@ -365,15 +368,17 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
   return (
     <div className="space-y-3">
       {counts.map((count, gi) => (
-        <div key={gi} className="rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-default">
+        <div key={gi}>
+          <div className="flex items-center justify-between px-4 py-2 bg-background">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>
           {[...Array(count)].map((_, i) => {
             rowIndex++;
+            const isFirst = i === 0;
+            const isLast = i === count - 1;
             return (
-              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"}`}>
+              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""}`}>
                 <Skeleton className="size-9 rounded-full shrink-0" />
                 <div className="w-40 shrink-0 space-y-1.5">
                   <Skeleton className="h-3.5 w-3/4" />
@@ -813,19 +818,21 @@ export default function Home() {
                   </Popover>
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <SidebarMenu>
+                  <SidebarMenu className="gap-2">
                     {accs.map((a) => {
                       const icon = getAccountIcon(a.accountType, a.name);
                       const bal = a.balance.currentBalance;
                       const isActive = selectedAccount === a.id && activeView === "accounts";
                       return (
                         <SidebarMenuItem key={a.id}>
-                          <div className={`group/row flex items-center gap-1 rounded-lg px-2 py-2 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"}`}>
+                          <div className={`group/row flex items-center gap-1 rounded-2xl px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "bg-card hover:bg-sidebar-accent/50"}`}>
                             <button
-                              className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                              className="flex-1 flex items-center gap-2.5 min-w-0 text-left"
                               onClick={() => { setSelectedAccount(a.id); setActiveView("accounts"); }}
                             >
-                              <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              <div className="size-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
+                                <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
+                              </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{a.name}</p>
                                 <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
@@ -986,12 +993,12 @@ export default function Home() {
               {/* Search bar */}
               <div className="relative flex items-center">
                 <HugeiconsIcon icon={Search01Icon} className="absolute left-3 size-3.5 text-muted pointer-events-none" />
-                <input
+                <Input
                   type="text"
                   placeholder="Search by note or payee…"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-default text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
                 />
                 {searchInput && (
                   <button onClick={() => { setSearchInput(""); setDebouncedSearch(""); }} className="absolute right-3 text-muted hover:text-foreground">

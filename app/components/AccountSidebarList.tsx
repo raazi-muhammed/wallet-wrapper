@@ -6,7 +6,6 @@ import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ChevronRightIcon,
-  InformationCircleIcon,
   LayoutListIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
@@ -23,7 +22,6 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fetchAccounts } from "../actions";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
@@ -123,59 +121,10 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
             return map;
           }, new Map<string, typeof accounts>())
         ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => {
-          const isCreditCard = type === "CreditCard";
-          const totalBal = accs.reduce((s, a) => s + a.balance.currentBalance, 0);
-          const totalLimit = isCreditCard ? accs.reduce((s, a) => s + (a.balance.creditLimit ?? 0), 0) : 0;
-          const totalUsed = isCreditCard ? accs.reduce((s, a) => s + Math.abs(Math.min(a.balance.currentBalance, 0)), 0) : 0;
-          const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
-          const totalAvailable = isCreditCard ? accs.reduce((s, a) => s + (a.balance.availableCredit ?? 0), 0) : 0;
-          const currency = accs[0]?.balance.currencyCode;
           return (
             <SidebarGroup key={type} className="pt-0">
-              <SidebarGroupLabel className="group/label text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2 flex items-center justify-between">
-                <span>{type.replace(/([A-Z])/g, " $1").trim()}</span>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-0.5 rounded text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors opacity-0 group-hover/label:opacity-100"
-                    >
-                      <HugeiconsIcon icon={InformationCircleIcon} className="size-3" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent side="right" align="start" className="w-52 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
-                    <div className="px-3 pt-3 pb-2">
-                      <p className="text-xs font-semibold text-foreground">{type.replace(/([A-Z])/g, " $1").trim()} Total</p>
-                    </div>
-                    <div className="px-3 pb-3 pt-0 space-y-2">
-                      <div className="rounded-lg bg-card px-3 py-2.5">
-                        <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
-                        <p className={`text-base font-semibold tabular-nums ${totalBal < 0 ? "text-danger" : "text-foreground"}`}>
-                          {fmt(totalBal, currency)}
-                        </p>
-                      </div>
-                      {isCreditCard && totalLimit > 0 && (
-                        <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted">Limit</span>
-                            <span className="font-medium text-foreground tabular-nums">{fmt(totalLimit, currency)}</span>
-                          </div>
-                          <div className="h-1 rounded-full bg-default overflow-hidden">
-                            <div className={`h-full rounded-full ${totalPct >= 90 ? "bg-danger" : totalPct >= 70 ? "bg-warning" : "bg-success"}`} style={{ width: `${Math.min(totalPct, 100)}%` }} />
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted">Usage</span>
-                            <span className={`font-semibold tabular-nums ${totalPct >= 90 ? "text-danger" : totalPct >= 70 ? "text-warning" : "text-success"}`}>{totalPct.toFixed(1)}%</span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted">Available</span>
-                            <span className="font-medium text-success tabular-nums">{fmt(totalAvailable, currency)}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+              <SidebarGroupLabel className="text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2">
+                {type.replace(/([A-Z])/g, " $1").trim()}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
@@ -202,70 +151,8 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                           </Link>
                           <HugeiconsIcon
                             icon={ChevronRightIcon}
-                            className="md:hidden shrink-0 size-4 text-sidebar-foreground/30"
+                            className="shrink-0 size-4 text-sidebar-foreground/30"
                           />
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className={`hidden md:inline-block shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors ${isActive ? "opacity-100" : "opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto"}`}
-                              >
-                                <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent side="right" align="start" className="w-60 p-0 rounded-xl border-0 bg-secondary overflow-hidden">
-                              {/* Header */}
-                              <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
-                                <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
-                                  <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "currentColor" }} />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
-                                  <p className="text-[11px] text-muted">{a.accountType.replace(/([A-Z])/g, " $1").trim()}</p>
-                                </div>
-                              </div>
-
-                              {/* Stats grid */}
-                              <div className="px-3 pb-3 pt-0 space-y-2">
-                                {/* Balance — full width */}
-                                <div className="rounded-lg bg-card px-3 py-2.5">
-                                  <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Balance</p>
-                                  <p className={`text-base font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
-                                    {fmt(bal, a.balance.currencyCode)}
-                                  </p>
-                                </div>
-
-                                {/* Credit card compact */}
-                                {a.balance.creditLimit != null && a.balance.creditLimit > 0 && (() => {
-                                  const used = Math.abs(Math.min(bal, 0));
-                                  const pct = (used / a.balance.creditLimit!) * 100;
-                                  const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
-                                  const barColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
-                                  return (
-                                    <div className="rounded-lg bg-card px-3 py-2.5 space-y-2">
-                                      <div className="flex items-center justify-between text-xs">
-                                        <span className="text-muted">Limit</span>
-                                        <span className="font-medium text-foreground tabular-nums">{fmt(a.balance.creditLimit, a.balance.currencyCode)}</span>
-                                      </div>
-                                      <div className="h-1 rounded-full bg-default overflow-hidden">
-                                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                                      </div>
-                                      <div className="flex items-center justify-between text-xs">
-                                        <span className="text-muted">Usage</span>
-                                        <span className={`font-semibold tabular-nums ${pctColor}`}>{pct.toFixed(1)}%</span>
-                                      </div>
-                                      {a.balance.availableCredit != null && (
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span className="text-muted">Available</span>
-                                          <span className="font-medium text-success tabular-nums">{fmt(a.balance.availableCredit, a.balance.currencyCode)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
                         </div>
                       </SidebarMenuItem>
                     );
@@ -305,11 +192,11 @@ export function AccountSidebarList() {
   }
 
   // The resizable Panel (DashboardShell.tsx) already provides the correct,
-  // draggable width and a properly bounded height on both mobile and
-  // desktop, so this just fills whatever box the Panel gives it —
-  // `collapsible="none"` renders a plain, non-fixed, non-collapsing column
-  // (no separate "floating"/fixed-position variant needed, and no per-
-  // breakpoint branching here — same markup at every width).
+  // draggable width and a properly bounded, independently-scrollable height,
+  // so this just fills whatever box the Panel gives it — `collapsible="none"`
+  // renders a plain, non-fixed, non-collapsing column (no separate
+  // "floating"/fixed-position variant needed, and no per-breakpoint
+  // branching here — same markup at every width).
   return (
     <Sidebar collapsible="none" className="h-full w-full">
       {content}

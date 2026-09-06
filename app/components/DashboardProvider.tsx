@@ -6,10 +6,16 @@ import { useRouter } from "next/navigation";
 
 type Period = "3m" | "6m" | "1y" | "all";
 
-const SIDEBAR_WIDTH_STORAGE_KEY = "wallet_sidebar_width";
-export const SIDEBAR_WIDTH_DEFAULT = 256;
-export const SIDEBAR_WIDTH_MIN = 200;
-export const SIDEBAR_WIDTH_MAX = 420;
+// A pixel width has no relationship to how wide the viewport actually is —
+// persisted from a desktop session, it can exceed a phone's entire screen,
+// so the sidebar is sized as a *percentage* of the available space instead.
+// Percentages are inherently safe at any viewport width, with no client
+// measurement (and its "window.innerWidth reads 0 for a moment" pitfalls)
+// required.
+const SIDEBAR_WIDTH_STORAGE_KEY = "wallet_sidebar_percent";
+export const SIDEBAR_PERCENT_DEFAULT = 20;
+export const SIDEBAR_PERCENT_MIN = 15;
+export const SIDEBAR_PERCENT_MAX = 50;
 
 type DashboardContextValue = {
   token: string;
@@ -21,14 +27,14 @@ type DashboardContextValue = {
   handleSave: (t: string) => void;
   handleDisconnect: () => void;
   invalidateAll: () => void;
-  sidebarWidth: number;
-  setSidebarWidth: (px: number) => void;
+  sidebarWidthPercent: number;
+  setSidebarWidthPercent: (percent: number) => void;
 };
 
-function getInitialSidebarWidth() {
-  if (typeof window === "undefined") return SIDEBAR_WIDTH_DEFAULT;
+function getInitialSidebarWidthPercent() {
+  if (typeof window === "undefined") return SIDEBAR_PERCENT_DEFAULT;
   const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
-  return stored >= SIDEBAR_WIDTH_MIN && stored <= SIDEBAR_WIDTH_MAX ? stored : SIDEBAR_WIDTH_DEFAULT;
+  return stored >= SIDEBAR_PERCENT_MIN && stored <= SIDEBAR_PERCENT_MAX ? stored : SIDEBAR_PERCENT_DEFAULT;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -55,7 +61,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   // via an effect and remounting the Panel once ready — was tried and
   // discarded: remounting ResizablePanelGroup this soon after its initial
   // mount left it permanently stuck unable to measure itself.
-  const [sidebarWidth, setSidebarWidthState] = useState(getInitialSidebarWidth);
+  const [sidebarWidthPercent, setSidebarWidthPercentState] = useState(getInitialSidebarWidthPercent);
 
   useEffect(() => {
     const t = localStorage.getItem("wallet_token") ?? "";
@@ -80,9 +86,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     router.push("/");
   }
 
-  function setSidebarWidth(px: number) {
-    const clamped = Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, px));
-    setSidebarWidthState(clamped);
+  function setSidebarWidthPercent(percent: number) {
+    const clamped = Math.min(SIDEBAR_PERCENT_MAX, Math.max(SIDEBAR_PERCENT_MIN, percent));
+    setSidebarWidthPercentState(clamped);
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clamped));
   }
 
@@ -105,8 +111,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         handleSave,
         handleDisconnect,
         invalidateAll,
-        sidebarWidth,
-        setSidebarWidth,
+        sidebarWidthPercent,
+        setSidebarWidthPercent,
       }}
     >
       {children}

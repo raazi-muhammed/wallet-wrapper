@@ -93,18 +93,6 @@
   }
 }
 
-:root,
-.dark {
-  --sidebar: var(--color-secondary);
-  --sidebar-foreground: var(--color-foreground);
-  --sidebar-primary: var(--color-primary);
-  --sidebar-primary-foreground: var(--color-primary-foreground);
-  --sidebar-accent: var(--color-accent);
-  --sidebar-accent-foreground: var(--color-accent-foreground);
-  --sidebar-border: var(--color-border);
-  --sidebar-ring: var(--color-ring);
-}
-
 /* DashboardShell.tsx's resizable sidebar/detail Panels must be true DOM
    children of their Group (its drag logic walks real DOM siblings, not just
    the CSS layout tree — a wrapper div, even `display:contents`, breaks
@@ -124,4 +112,16 @@
   #detail-panel[data-hidden="true"] {
     display: none !important;
   }
+}
+
+:root,
+.dark {
+  --sidebar: var(--color-secondary);
+  --sidebar-foreground: var(--color-foreground);
+  --sidebar-primary: var(--color-primary);
+  --sidebar-primary-foreground: var(--color-primary-foreground);
+  --sidebar-accent: var(--color-accent);
+  --sidebar-accent-foreground: var(--color-accent-foreground);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-ring);
 }

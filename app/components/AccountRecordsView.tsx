@@ -15,6 +15,7 @@ import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./AddRecordModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
 
@@ -488,19 +489,17 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {!isSearching && (
-            <div className="flex items-center gap-0.5 rounded-full bg-default p-0.5">
-              {(["3m", "6m", "1y", "all"] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                    period === p ? "bg-default-hover text-foreground" : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {p === "3m" ? "3M" : p === "6m" ? "6M" : p === "1y" ? "1Y" : "All"}
-                </button>
-              ))}
-            </div>
+            <Select value={period} onValueChange={(v) => setPeriod(v as "3m" | "6m" | "1y" | "all")}>
+              <SelectTrigger className="h-auto w-auto gap-1.5 rounded-full border-0 bg-default px-3 py-1.5 text-xs font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="3m">3M</SelectItem>
+                <SelectItem value="6m">6M</SelectItem>
+                <SelectItem value="1y">1Y</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
           )}
           {token && (
             <AddRecordButton

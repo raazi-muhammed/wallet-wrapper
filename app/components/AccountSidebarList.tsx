@@ -19,13 +19,13 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAccounts } from "../actions";
+import { fetchAccounts, fetchApiStats } from "../actions";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { useDashboard } from "./DashboardProvider";
+import { SettingsPopover } from "./AccountRecordsView";
 
 function fmt(amount: number | undefined, currency: string | undefined) {
   if (amount == null || !currency) return "—";
@@ -54,7 +54,6 @@ function SidebarSkeleton() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarSeparator />
         <SidebarGroup className="px-4 pt-0">
           <SidebarGroupLabel>
             <Skeleton className="h-2.5 w-16" />
@@ -99,7 +98,7 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem className="before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator">
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/insights"} size="lg" className="rounded-none px-3">
                   <Link href="/insights">
                     <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
@@ -110,8 +109,6 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarSeparator />
 
         {Array.from(
           accounts.reduce((map, a) => {
@@ -128,12 +125,12 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
-                  {accs.map((a, idx) => {
+                  {accs.map((a) => {
                     const icon = getAccountIcon(a.accountType, a.name);
                     const bal = a.balance.currentBalance;
                     const isActive = pathname === `/account/${a.id}`;
                     return (
-                      <SidebarMenuItem key={a.id} className={idx > 0 ? "before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-separator" : ""}>
+                      <SidebarMenuItem key={a.id}>
                         <div className={`group/row relative flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent/10 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-0.5 before:rounded-full before:bg-sidebar-primary" : "hover:bg-sidebar-accent/10"}`}>
                           <Link
                             href={`/account/${a.id}`}
@@ -168,12 +165,18 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
 }
 
 export function AccountSidebarList() {
-  const { token } = useDashboard();
+  const { token, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
   const pathname = usePathname();
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["accounts", token],
     queryFn: () => fetchAccounts(token),
+    enabled: !!token,
+  });
+
+  const { data: stats = null } = useQuery({
+    queryKey: ["stats", token],
+    queryFn: () => fetchApiStats(token),
     enabled: !!token,
   });
 
@@ -199,6 +202,17 @@ export function AccountSidebarList() {
   // branching here — same markup at every width).
   return (
     <Sidebar collapsible="none" className="h-full w-full">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <span className="font-display text-xl font-bold text-sidebar-primary">Wallet</span>
+        <SettingsPopover
+          token={token}
+          stats={stats}
+          period={period}
+          setPeriod={setPeriod}
+          onSave={handleSave}
+          onDisconnect={handleDisconnect}
+        />
+      </div>
       {content}
     </Sidebar>
   );

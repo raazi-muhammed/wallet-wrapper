@@ -12,11 +12,12 @@ import {
   Settings01Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
-import { fetchAccounts, fetchRecords, fetchApiStats } from "../actions";
+import { fetchAccounts, fetchRecords } from "../actions";
 import type { Account, WalletRecord, ApiStats } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./AddRecordModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModalTemplate } from "@/templates/modal-template";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,7 +76,7 @@ const PERIOD_LABELS: Record<"3m" | "6m" | "1y" | "all", string> = {
 
 // ── Settings Popover ──────────────────────────────────────────────────────────
 
-function SettingsPopover({
+export function SettingsPopover({
   token,
   stats,
   period,
@@ -115,12 +116,14 @@ function SettingsPopover({
       onOpenChange={setOpen}
       title="Settings"
       trigger={
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           aria-label="Settings"
-          className="flex items-center justify-center size-10 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
+          className="rounded-full text-muted hover:bg-secondary dark:hover:bg-secondary aria-expanded:bg-secondary focus-visible:border-transparent focus-visible:ring-0"
         >
           <HugeiconsIcon icon={Settings01Icon} className="size-4" />
-        </button>
+        </Button>
       }
     >
       <div className="space-y-2">
@@ -435,7 +438,7 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
 
 export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const router = useRouter();
-  const { token, period, setPeriod, searchInput, setSearchInput, debouncedSearch, handleSave, handleDisconnect, invalidateAll } = useDashboard();
+  const { token, period, searchInput, setSearchInput, debouncedSearch, handleSave, invalidateAll } = useDashboard();
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
@@ -452,12 +455,6 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       const { records } = await fetchRecords(token, { limit: 200 });
       return records;
     },
-    enabled: !!token,
-  });
-
-  const { data: stats = null } = useQuery({
-    queryKey: ["stats", token],
-    queryFn: () => fetchApiStats(token),
     enabled: !!token,
   });
 
@@ -589,14 +586,6 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
               onOpenRecord={setEditingRecord}
             />
           )}
-          <SettingsPopover
-            token={token}
-            stats={stats}
-            period={period}
-            setPeriod={setPeriod}
-            onSave={handleSave}
-            onDisconnect={handleDisconnect}
-          />
         </div>
       </div>
 

@@ -526,7 +526,8 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       : activeAccounts.find((a) => a.id === accountId)?.name ?? "Records";
 
   const initialLoading = !!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0;
-  const recordsSwitching = !recordsInitialLoading && recordsFetching && !isFetchingNextPage && !isSearching;
+  const recordsLoading = recordsFetching && !isFetchingNextPage;
+  const showRecordsSkeleton = isSearching ? searchFetching : recordsLoading;
 
   if (!token) {
     return <TokenConnectForm onSave={handleSave} />;
@@ -606,7 +607,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         )}
       </div>
 
-      {recordsSwitching ? (
+      {showRecordsSkeleton ? (
         <RecordsSkeleton />
       ) : (
         <RecordsTable
@@ -617,7 +618,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         />
       )}
 
-      {!recordsSwitching && !isSearching && hasNextPage && (
+      {!showRecordsSkeleton && !isSearching && hasNextPage && (
         <div className="flex justify-center pt-2 pb-1">
           <button
             onClick={() => fetchNextPage()}
@@ -629,7 +630,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         </div>
       )}
 
-      {!recordsSwitching && !isSearching && period !== "all" && (
+      {!showRecordsSkeleton && !isSearching && period !== "all" && (
         <p className="text-center text-xs text-muted pt-1 pb-2">
           Only showing data for the last {PERIOD_LABELS[period]}. Open Settings to change the range.
         </p>

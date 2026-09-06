@@ -42,8 +42,8 @@ function SidebarSkeleton() {
       <SidebarHeader className="px-4 pt-4 pb-2">
         <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="pt-0">
+      <SidebarContent className="pb-4">
+        <SidebarGroup className="px-4 pt-0">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -55,7 +55,7 @@ function SidebarSkeleton() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarSeparator />
-        <SidebarGroup className="pt-0">
+        <SidebarGroup className="px-4 pt-0">
           <SidebarGroupLabel>
             <Skeleton className="h-2.5 w-16" />
           </SidebarGroupLabel>
@@ -87,8 +87,8 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
       <SidebarHeader className="px-4 pt-4 pb-2">
         <p className="text-xs font-semibold tracking-widest text-sidebar-foreground/50">Accounts</p>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="pt-0">
+      <SidebarContent className="pb-4">
+        <SidebarGroup className="px-4 pt-0">
           <SidebarGroupContent>
             <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
               <SidebarMenuItem>
@@ -122,7 +122,7 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
           }, new Map<string, typeof accounts>())
         ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => {
           return (
-            <SidebarGroup key={type} className="pt-0">
+            <SidebarGroup key={type} className="px-4 pt-0">
               <SidebarGroupLabel className="text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2">
                 {type.replace(/([A-Z])/g, " $1").trim()}
               </SidebarGroupLabel>

@@ -60,7 +60,7 @@ export function DashboardShell({
         >
           {sidebar}
         </ResizablePanel>
-        <ResizableHandle className="hidden md:flex" />
+        <ResizableHandle className="hidden md:flex after:bg-transparent" />
         <ResizablePanel id="detail-panel" data-hidden={isDetailActive ? "false" : "true"}>
           <main>{detail}</main>
         </ResizablePanel>

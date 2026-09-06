@@ -66,7 +66,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
             const pctColor = pct >= 90 ? "text-danger" : pct >= 70 ? "text-warning" : "text-success";
 
             return (
-              <div key={a.id} className="rounded-xl p-4 space-y-3" style={{ background: "hsl(240 3% 6%)" }}>
+              <div key={a.id} className="rounded-xl p-4 space-y-3 bg-card">
                 <div className="flex items-center gap-2.5">
                   <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
                   <span className="text-sm font-medium text-foreground">{a.name}</span>
@@ -91,7 +91,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
           })}
 
           {creditCards.length > 1 && (
-            <div className="rounded-xl p-4 space-y-3 border border-border" style={{ background: "hsl(240 3% 8%)" }}>
+            <div className="rounded-xl p-4 space-y-3 border border-border bg-card-2">
               <p className="text-xs font-semibold text-muted uppercase tracking-widest">Total</p>
               <CreditUsageBar pct={totalPct} />
               <div className="flex items-center justify-between text-xs">
@@ -124,7 +124,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
             const icon = getAccountIcon(a.accountType, a.name);
             const bal = a.balance.currentBalance;
             return (
-              <div key={a.id} className="rounded-xl p-4 flex items-center justify-between" style={{ background: "hsl(240 3% 6%)" }}>
+              <div key={a.id} className="rounded-xl p-4 flex items-center justify-between bg-card">
                 <div className="flex items-center gap-2.5">
                   <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />
                   <span className="text-sm font-medium text-foreground">{a.name}</span>
@@ -137,7 +137,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
           })}
 
           {currentAccounts.length > 1 && (
-            <div className="rounded-xl p-4 flex items-center justify-between border border-border" style={{ background: "hsl(240 3% 8%)" }}>
+            <div className="rounded-xl p-4 flex items-center justify-between border border-border bg-card-2">
               <span className="text-xs font-semibold text-muted uppercase tracking-widest">Total</span>
               <span className={`text-sm font-semibold tabular-nums ${currentAccountsTotal < 0 ? "text-danger" : "text-foreground"}`}>
                 {fmt(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}

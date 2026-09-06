@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
   Cancel01Icon,
   ArrowLeft01Icon,
+  Settings01Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { fetchAccounts, fetchRecords, fetchApiStats } from "../actions";
 import type { Account, WalletRecord, ApiStats } from "../actions";
@@ -15,7 +18,7 @@ import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./AddRecordModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
 
@@ -57,21 +60,33 @@ function periodFrom(period: "3m" | "6m" | "1y" | "all") {
   return d.toISOString().split("T")[0];
 }
 
+const PERIOD_LABELS: Record<"3m" | "6m" | "1y" | "all", string> = {
+  "3m": "3 months",
+  "6m": "6 months",
+  "1y": "1 year",
+  all: "all time",
+};
+
 // ── Settings Popover ──────────────────────────────────────────────────────────
 
 function SettingsPopover({
   token,
   stats,
+  period,
+  setPeriod,
   onSave,
   onDisconnect,
 }: {
   token: string;
   stats: ApiStats | null;
+  period: "3m" | "6m" | "1y" | "all";
+  setPeriod: (p: "3m" | "6m" | "1y" | "all") => void;
   onSave: (t: string) => void;
   onDisconnect: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(token);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => { setDraft(token); }, [token]);
 
@@ -89,58 +104,130 @@ function SettingsPopover({
   }
 
   return (
-    <>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="API settings"
-        className="flex items-center justify-center size-10 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4">
-          <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4Z"/>
-        </svg>
-      </button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          aria-label="Settings"
+          className="flex items-center justify-center size-10 rounded-full bg-default hover:bg-default-hover text-muted transition-colors"
+        >
+          <HugeiconsIcon icon={Settings01Icon} className="size-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md w-full p-0 overflow-hidden">
+        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 border-b border-border">
+          <DialogTitle className="text-base">Settings</DialogTitle>
+        </DialogHeader>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 sm:w-80 rounded-xl shadow-lg space-y-4 p-4" style={{ background: "#0F0F0F" }}>
+        <div className="px-4 sm:px-6 py-5 space-y-5">
+          <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">API Connection</p>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted uppercase tracking-widest">Bearer Token</label>
+            <div className="rounded-xl bg-card p-4 space-y-3">
               <input
                 type="password"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && draft && handleSaveAndClose(draft)}
-                placeholder="Paste your token…"
-                autoFocus
+                placeholder="Paste your bearer token…"
                 className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSaveAndClose(draft)}
-                disabled={!draft}
-                className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
-              >
-                Connect
-              </button>
-              {token && (
+              <div className="flex gap-2">
                 <button
-                  onClick={handleDisconnectAndClose}
-                  className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
+                  onClick={() => handleSaveAndClose(draft)}
+                  disabled={!draft}
+                  className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
                 >
-                  Disconnect
+                  Connect
                 </button>
-              )}
+                {token && (
+                  <button
+                    onClick={handleDisconnectAndClose}
+                    className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
             </div>
+          </div>
 
-            {stats && (
-              <div className="border-t border-separator pt-4 space-y-3">
-                <p className="text-xs font-semibold text-muted uppercase tracking-widest">API Usage Stats</p>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">Period</p>
+            <div className="rounded-xl overflow-hidden bg-card">
+              {([
+                { id: "3m", label: "3 Months" },
+                { id: "6m", label: "6 Months" },
+                { id: "1y", label: "1 Year" },
+                { id: "all", label: "All Time" },
+              ] as const).map((p, idx) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPeriod(p.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-sm text-foreground hover:bg-default-hover transition-colors ${
+                    idx > 0 ? "border-t border-separator" : ""
+                  }`}
+                >
+                  {p.label}
+                  {period === p.id && <HugeiconsIcon icon={Tick02Icon} className="size-4 text-primary" />}
+                </button>
+              ))}
+            </div>
+          </div>
 
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">Theme</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { id: "system", label: "System" },
+                { id: "light", label: "Light" },
+                { id: "dark", label: "Dark" },
+              ] as const).map((t) => {
+                const selected = theme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTheme(t.id)}
+                    className="flex flex-col items-center gap-1.5"
+                  >
+                    <div
+                      className={`relative w-full aspect-video rounded-xl overflow-hidden border-2 transition-colors ${
+                        selected ? "border-primary" : "border-border"
+                      }`}
+                    >
+                      {t.id === "system" ? (
+                        <div className="absolute inset-0 flex">
+                          <div className="flex-1 flex items-center justify-center" style={{ background: "#0a0a0a" }}>
+                            <span className="px-2 py-0.5 rounded-full border border-white/30 text-white text-[9px] font-semibold">Aa</span>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center" style={{ background: "#e8e8e8" }}>
+                            <span className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-semibold shadow-sm">Aa</span>
+                          </div>
+                        </div>
+                      ) : t.id === "light" ? (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "#e8e8e8" }}>
+                          <span className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-semibold shadow-sm">Aa</span>
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "#0a0a0a" }}>
+                          <span className="px-2 py-0.5 rounded-full border border-white/30 text-white text-[9px] font-semibold">Aa</span>
+                        </div>
+                      )}
+                      {selected && (
+                        <div className="absolute bottom-1 right-1 size-4 rounded-full bg-primary flex items-center justify-center">
+                          <HugeiconsIcon icon={Tick02Icon} className="size-2.5 text-primary-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-xs ${selected ? "text-foreground font-medium" : "text-muted"}`}>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {stats && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">API Usage Stats</p>
+              <div className="rounded-xl bg-card p-4 space-y-3">
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs text-muted">
                     <span>Rate limit</span>
@@ -174,11 +261,11 @@ function SettingsPopover({
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        </>
-      )}
-    </>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -228,7 +315,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
           <div key={date}>
             <div className="flex items-center justify-between px-4 py-2 bg-background">
               <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
-              <span className={`text-xs font-mono font-semibold ${dayTotal >= 0 ? "text-success" : "text-danger"}`}>
+              <span className="text-xs font-mono font-semibold text-muted">
                 {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
               </span>
             </div>
@@ -471,7 +558,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     <div className="px-4 sm:px-6 py-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 font-display text-base font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 font-display text-xl font-semibold text-foreground">
             <button
               onClick={() => router.push("/")}
               aria-label="Back"
@@ -488,19 +575,6 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {!isSearching && (
-            <Select value={period} onValueChange={(v) => setPeriod(v as "3m" | "6m" | "1y" | "all")}>
-              <SelectTrigger className="h-auto w-auto gap-1.5 rounded-full border-0 bg-default px-3 py-1.5 text-xs font-medium">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="3m">3M</SelectItem>
-                <SelectItem value="6m">6M</SelectItem>
-                <SelectItem value="1y">1Y</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
           {token && (
             <AddRecordButton
               token={token}
@@ -515,6 +589,8 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           <SettingsPopover
             token={token}
             stats={stats}
+            period={period}
+            setPeriod={setPeriod}
             onSave={handleSave}
             onDisconnect={handleDisconnect}
           />
@@ -559,6 +635,12 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
             {isFetchingNextPage ? "Loading…" : "Load more"}
           </button>
         </div>
+      )}
+
+      {!recordsSwitching && !isSearching && period !== "all" && (
+        <p className="text-center text-xs text-muted pt-1 pb-2">
+          Only showing data for the last {PERIOD_LABELS[period]}. Open Settings to change the range.
+        </p>
       )}
 
       {editingRecord && (

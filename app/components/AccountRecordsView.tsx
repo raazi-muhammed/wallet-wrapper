@@ -19,6 +19,7 @@ import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./AddR
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
 
@@ -49,6 +50,11 @@ function fmtTime(iso: string) {
 
 function fmtDateLong(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function maskToken(token: string) {
+  if (token.length <= 8) return "•".repeat(token.length);
+  return `${token.slice(0, 4)}${"•".repeat(8)}${token.slice(-4)}`;
 }
 
 function periodFrom(period: "3m" | "6m" | "1y" | "all") {
@@ -114,67 +120,70 @@ function SettingsPopover({
         </button>
       </DialogTrigger>
       <DialogContent className="max-w-md w-full p-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 border-b border-border">
+        <DialogHeader className="px-4 sm:px-6 pt-4 pb-2 text-center sm:text-center">
           <DialogTitle className="text-base">Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="px-4 sm:px-6 py-5 space-y-5">
+        <div className="px-4 sm:px-6 pt-2 pb-5 space-y-5">
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">API Connection</p>
+            <p className="text-sm font-semibold text-foreground pl-4">API Connection</p>
             <div className="rounded-xl bg-card p-4 space-y-3">
-              <input
-                type="password"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && draft && handleSaveAndClose(draft)}
-                placeholder="Paste your bearer token…"
-                className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleSaveAndClose(draft)}
-                  disabled={!draft}
-                  className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
-                >
-                  Connect
-                </button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sm">
+                  <span className={`size-2 rounded-full ${token ? "bg-success" : "bg-muted"}`} />
+                  <span className="text-foreground font-medium">{token ? "Connected" : "Not connected"}</span>
+                </div>
                 {token && (
                   <button
                     onClick={handleDisconnectAndClose}
-                    className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
+                    className="px-3 py-1 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
                   >
                     Disconnect
                   </button>
                 )}
               </div>
+
+              {token ? (
+                <p className="font-mono text-xs text-muted">{maskToken(token)}</p>
+              ) : (
+                <>
+                  <input
+                    type="password"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && draft && handleSaveAndClose(draft)}
+                    placeholder="Paste your bearer token…"
+                    className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  <button
+                    onClick={() => handleSaveAndClose(draft)}
+                    disabled={!draft}
+                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                  >
+                    Connect
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">Period</p>
-            <div className="rounded-xl overflow-hidden bg-card">
-              {([
-                { id: "3m", label: "3 Months" },
-                { id: "6m", label: "6 Months" },
-                { id: "1y", label: "1 Year" },
-                { id: "all", label: "All Time" },
-              ] as const).map((p, idx) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPeriod(p.id)}
-                  className={`w-full flex items-center justify-between px-4 py-3 text-sm text-foreground hover:bg-default-hover transition-colors ${
-                    idx > 0 ? "border-t border-separator" : ""
-                  }`}
-                >
-                  {p.label}
-                  {period === p.id && <HugeiconsIcon icon={Tick02Icon} className="size-4 text-primary" />}
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-semibold text-foreground pl-4">Period</p>
+            <Select value={period} onValueChange={(v) => setPeriod(v as "3m" | "6m" | "1y" | "all")}>
+              <SelectTrigger className="w-full rounded-xl bg-card border-0 px-4 py-3 h-auto text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3m">3 Months</SelectItem>
+                <SelectItem value="6m">6 Months</SelectItem>
+                <SelectItem value="1y">1 Year</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">Theme</p>
+            <p className="text-sm font-semibold text-foreground pl-4">Theme</p>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { id: "system", label: "System" },
@@ -226,9 +235,9 @@ function SettingsPopover({
 
           {stats && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-foreground">API Usage Stats</p>
-              <div className="rounded-xl bg-card p-4 space-y-3">
-                <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-foreground pl-4">API Usage Stats</p>
+              <div className="rounded-xl overflow-hidden bg-card">
+                <div className="px-4 py-3 space-y-1.5">
                   <div className="flex justify-between text-xs text-muted">
                     <span>Rate limit</span>
                     <span className="font-mono text-foreground">{used} / {stats.rateLimit} req/hr</span>
@@ -241,24 +250,22 @@ function SettingsPopover({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg bg-default p-2.5 space-y-0.5">
-                    <p className="text-muted">Last change</p>
-                    <p className="text-foreground font-medium">
-                      {stats.lastDataChangeAt ? fmtRelative(stats.lastDataChangeAt) : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-default p-2.5 space-y-0.5">
-                    <p className="text-muted">Revision</p>
-                    <p className="text-foreground font-medium font-mono">{stats.lastDataChangeRev ?? "—"}</p>
-                  </div>
-                  <div className="rounded-lg bg-default p-2.5 space-y-0.5 col-span-2">
-                    <p className="text-muted">Sync status</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`size-2 rounded-full ${stats.syncInProgress ? "bg-warning animate-pulse" : "bg-success"}`} />
-                      <p className="text-foreground font-medium">{stats.syncInProgress ? "Syncing…" : "Up to date"}</p>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
+                  <span className="text-muted">Last change</span>
+                  <span className="text-foreground font-medium">
+                    {stats.lastDataChangeAt ? fmtRelative(stats.lastDataChangeAt) : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
+                  <span className="text-muted">Revision</span>
+                  <span className="text-foreground font-medium font-mono">{stats.lastDataChangeRev ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
+                  <span className="text-muted">Sync status</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`size-2 rounded-full ${stats.syncInProgress ? "bg-warning animate-pulse" : "bg-success"}`} />
+                    <span className="text-foreground font-medium">{stats.syncInProgress ? "Syncing…" : "Up to date"}</span>
+                  </span>
                 </div>
               </div>
             </div>

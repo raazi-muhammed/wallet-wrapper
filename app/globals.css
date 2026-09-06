@@ -8,47 +8,47 @@
   --font-display: var(--font-fira-code);
 
   /* ── Core surfaces ─────────────────────────── */
-  --color-background:      hsl(240 4% 5%);
-  --color-foreground:      hsl(0 0% 98%);
-  --color-default:         hsl(240 4% 13%);
-  --color-default-hover:   hsl(240 4% 18%);
-  --color-border:          hsl(240 1% 15%);
+  --color-background:      var(--background);
+  --color-foreground:      var(--foreground);
+  --color-default:         var(--default);
+  --color-default-hover:   var(--default-hover);
+  --color-border:          var(--border);
   --color-separator:       var(--color-border);
-  --color-input:           hsl(240 1% 19%);
-  --color-ring:            hsl(0 0% 45%);
-  --color-popover:         var(--color-card);
-  --color-popover-foreground: var(--color-card-foreground);
+  --color-input:           var(--input);
+  --color-ring:            var(--ring);
+  --color-popover:         var(--color-secondary);
+  --color-popover-foreground: var(--color-secondary-foreground);
 
   /* ── Text ──────────────────────────────────── */
   /* This project uses `text-muted` directly as a text color (not just
-     `-foreground`), so both must stay a legible light gray rather than
+     `-foreground`), so both must stay a legible gray rather than
      the doc's bg-dark/text-light split. */
-  --color-muted:            hsl(0 0% 63%);
+  --color-muted:            var(--muted);
   --color-muted-foreground: var(--color-muted);
 
   /* ── Accent / primary ──────────────────────── */
-  --color-accent:           hsl(239 35% 24%);
-  --color-accent-hover:     hsl(239 35% 17%);
-  --color-accent-foreground: hsl(0 0% 98%);
-  --color-primary:          hsl(239 83% 67%);
-  --color-primary-foreground: hsl(0 0% 98%);
+  --color-accent:           var(--accent);
+  --color-accent-hover:     var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-primary:          var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
 
   /* ── Card / secondary ──────────────────────── */
-  --color-card:             hsl(240 9% 9%);
-  --color-card-foreground:  hsl(0 0% 98%);
-  --color-card-2:           hsl(240 8% 7%);
-  --color-card-2-foreground: hsl(0 0% 98%);
-  --color-secondary:        hsl(240 6% 6%);
-  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-card:             var(--card);
+  --color-card-foreground:  var(--card-foreground);
+  --color-card-2:           var(--card-2);
+  --color-card-2-foreground: var(--card-2-foreground);
+  --color-secondary:        var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
   /* ── Semantic ──────────────────────────────── */
-  --color-success:                hsl(142 60% 50%);
-  --color-warning:                hsl(38 90% 55%);
-  --color-destructive:            hsl(359 100% 70%);
-  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-success:                var(--success);
+  --color-warning:                var(--warning);
+  --color-destructive:            var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-danger:                 var(--color-destructive);
-  --color-danger-soft:            hsl(359 100% 70% / 0.12);
-  --color-danger-soft-foreground: hsl(359 75% 85%);
+  --color-danger-soft:            var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
 
   /* ── Sidebar tokens ────────────────────────── */
   --color-sidebar:                    var(--sidebar);
@@ -75,10 +75,81 @@
 @layer base {
   :root {
     --radius: 1rem;
+
+    /* ── Core surfaces ───────────────────────── */
+    --background:      hsl(0 0% 100%);
+    --foreground:      hsl(240 6% 10%);
+    --default:         hsl(240 5% 94%);
+    --default-hover:   hsl(240 5% 88%);
+    --border:          hsl(240 6% 88%);
+    --input:           hsl(240 6% 92%);
+    --ring:            hsl(240 4% 60%);
+
+    /* ── Text ─────────────────────────────────── */
+    --muted:           hsl(240 4% 40%);
+
+    /* ── Accent / primary ─────────────────────── */
+    --accent:           hsl(239 40% 94%);
+    --accent-hover:     hsl(239 40% 88%);
+    --accent-foreground: hsl(239 45% 22%);
+    --primary:          hsl(239 83% 60%);
+    --primary-foreground: hsl(0 0% 100%);
+
+    /* ── Card / secondary ─────────────────────── */
+    --card:             hsl(0 0% 100%);
+    --card-foreground:  hsl(240 6% 10%);
+    --card-2:           hsl(240 10% 96%);
+    --card-2-foreground: hsl(240 6% 10%);
+    --secondary:        hsl(240 10% 97%);
+    --secondary-foreground: hsl(240 6% 10%);
+
+    /* ── Semantic ──────────────────────────────── */
+    --success:                hsl(142 65% 34%);
+    --warning:                hsl(38 92% 40%);
+    --destructive:            hsl(359 84% 46%);
+    --destructive-foreground: hsl(0 0% 100%);
+    --danger-soft:            hsl(359 84% 46% / 0.1);
+    --danger-soft-foreground: hsl(359 70% 36%);
+  }
+
+  .dark {
+    /* ── Core surfaces ───────────────────────── */
+    --background:      hsl(240 4% 5%);
+    --foreground:      hsl(0 0% 98%);
+    --default:         hsl(240 4% 13%);
+    --default-hover:   hsl(240 4% 18%);
+    --border:          hsl(240 1% 15%);
+    --input:           hsl(240 1% 19%);
+    --ring:            hsl(0 0% 45%);
+
+    /* ── Text ─────────────────────────────────── */
+    --muted:           hsl(0 0% 63%);
+
+    /* ── Accent / primary ─────────────────────── */
+    --accent:           hsl(239 35% 24%);
+    --accent-hover:     hsl(239 35% 17%);
+    --accent-foreground: hsl(0 0% 98%);
+    --primary:          hsl(239 83% 67%);
+    --primary-foreground: hsl(0 0% 98%);
+
+    /* ── Card / secondary ─────────────────────── */
+    --card:             hsl(240 9% 9%);
+    --card-foreground:  hsl(0 0% 98%);
+    --card-2:           hsl(240 8% 7%);
+    --card-2-foreground: hsl(0 0% 98%);
+    --secondary:        hsl(240 6% 6%);
+    --secondary-foreground: hsl(0 0% 98%);
+
+    /* ── Semantic ──────────────────────────────── */
+    --success:                hsl(142 60% 50%);
+    --warning:                hsl(38 90% 55%);
+    --destructive:            hsl(359 100% 70%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --danger-soft:            hsl(359 100% 70% / 0.12);
+    --danger-soft-foreground: hsl(359 75% 85%);
   }
 
   body {
-    background: hsl(240 4% 5%);
     min-height: 100vh;
   }
 }
@@ -90,6 +161,27 @@
 
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* DashboardShell.tsx's resizable sidebar/detail Panels must be true DOM
+   children of their Group (its drag logic walks real DOM siblings, not just
+   the CSS layout tree — a wrapper div, even `display:contents`, breaks
+   dragging). That rules out wrapping them for the mobile "only one of these
+   is visible, full width" behavior. react-resizable-panels also only exposes
+   `className`/`style` on a Panel's *inner* div, not the outer flex-item div
+   that actually carries flex-basis/flex-grow/display — so both the
+   visibility and the width fix for mobile have to target that outer div
+   directly, via its stable `id` and the `data-hidden` attribute set on it
+   in DashboardShell.tsx (any prop `Panel` doesn't recognize by name is
+   spread onto that same outer div). */
+@media (max-width: 767px) {
+  #sidebar-panel {
+    flex: 1 1 100% !important;
+  }
+  #sidebar-panel[data-hidden="true"],
+  #detail-panel[data-hidden="true"] {
+    display: none !important;
   }
 }
 

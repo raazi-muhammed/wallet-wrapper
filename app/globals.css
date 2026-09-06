@@ -104,3 +104,24 @@
   --sidebar-border: var(--color-border);
   --sidebar-ring: var(--color-ring);
 }
+
+/* DashboardShell.tsx's resizable sidebar/detail Panels must be true DOM
+   children of their Group (its drag logic walks real DOM siblings, not just
+   the CSS layout tree — a wrapper div, even `display:contents`, breaks
+   dragging). That rules out wrapping them for the mobile "only one of these
+   is visible, full width" behavior. react-resizable-panels also only exposes
+   `className`/`style` on a Panel's *inner* div, not the outer flex-item div
+   that actually carries flex-basis/flex-grow/display — so both the
+   visibility and the width fix for mobile have to target that outer div
+   directly, via its stable `id` and the `data-hidden` attribute set on it
+   in DashboardShell.tsx (any prop `Panel` doesn't recognize by name is
+   spread onto that same outer div). */
+@media (max-width: 767px) {
+  #sidebar-panel {
+    flex: 1 1 100% !important;
+  }
+  #sidebar-panel[data-hidden="true"],
+  #detail-panel[data-hidden="true"] {
+    display: none !important;
+  }
+}

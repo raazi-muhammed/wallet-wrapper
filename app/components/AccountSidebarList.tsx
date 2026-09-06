@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  ChevronRightIcon,
   InformationCircleIcon,
   LayoutListIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import {
-  SidebarProvider,
   Sidebar,
   SidebarHeader,
   SidebarContent,
@@ -200,11 +200,15 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                               </p>
                             </div>
                           </Link>
+                          <HugeiconsIcon
+                            icon={ChevronRightIcon}
+                            className="md:hidden shrink-0 size-4 text-sidebar-foreground/30"
+                          />
                           <Popover>
                             <PopoverTrigger asChild>
                               <button
                                 onClick={(e) => e.stopPropagation()}
-                                className={`shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors opacity-100 pointer-events-auto ${isActive ? "" : "md:opacity-0 md:pointer-events-none md:group-hover/row:opacity-100 md:group-hover/row:pointer-events-auto"}`}
+                                className={`hidden md:inline-block shrink-0 p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground/70 transition-colors ${isActive ? "opacity-100" : "opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto"}`}
                               >
                                 <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
                               </button>
@@ -300,27 +304,15 @@ export function AccountSidebarList() {
     return null;
   }
 
-  // Both variants render unconditionally; pure CSS breakpoints (not a
-  // viewport-width JS hook) decide which one is visible, so there's no
-  // dependency on hydration timing — see the comment in DashboardShell.tsx.
+  // The resizable Panel (DashboardShell.tsx) already provides the correct,
+  // draggable width and a properly bounded height on both mobile and
+  // desktop, so this just fills whatever box the Panel gives it —
+  // `collapsible="none"` renders a plain, non-fixed, non-collapsing column
+  // (no separate "floating"/fixed-position variant needed, and no per-
+  // breakpoint branching here — same markup at every width).
   return (
-    <>
-      <div className="md:hidden w-full h-dvh overflow-hidden">
-        {/* SidebarProvider's own default is `min-h-svh` (a floor, not a cap) —
-            fine on desktop where Sidebar's content is `fixed`-positioned, but
-            here (collapsible="none", normal document flow) it let the account
-            list grow past the viewport instead of scrolling inside it. Force
-            a bounded height so SidebarContent's own overflow-auto applies. */}
-        <SidebarProvider
-          className="h-dvh min-h-0"
-          style={{ "--sidebar-width": "100%" } as React.CSSProperties}
-        >
-          <Sidebar collapsible="none" className="h-full">
-            {content}
-          </Sidebar>
-        </SidebarProvider>
-      </div>
-      <Sidebar variant={initialLoading ? "sidebar" : "floating"}>{content}</Sidebar>
-    </>
+    <Sidebar collapsible="none" className="h-full w-full">
+      {content}
+    </Sidebar>
   );
 }

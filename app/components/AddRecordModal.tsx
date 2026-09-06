@@ -8,12 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ModalTemplate } from "@/templates/modal-template";
 import {
   Select,
   SelectContent,
@@ -83,21 +78,25 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
       <Button onClick={() => setOpen(true)} disabled={!token}>
         + Add Record
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[720px] w-full p-0 max-h-[90vh] overflow-hidden flex flex-col">
-          <RecordForm
-            mode="add"
-            token={token}
-            accounts={accounts}
-            records={records}
-            defaultAccountId={defaultAccountId}
-            onSuccess={() => { setOpen(false); onSuccess(); }}
-            onCancel={() => setOpen(false)}
-            onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
-            onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
-          />
-        </DialogContent>
-      </Dialog>
+      <ModalTemplate
+        open={open}
+        onOpenChange={setOpen}
+        title="Add record"
+        className="max-w-[720px] max-h-[90vh] flex flex-col gap-0"
+        bodyClassName="flex flex-col flex-1 min-h-0 p-0"
+      >
+        <RecordForm
+          mode="add"
+          token={token}
+          accounts={accounts}
+          records={records}
+          defaultAccountId={defaultAccountId}
+          onSuccess={() => { setOpen(false); onSuccess(); }}
+          onCancel={() => setOpen(false)}
+          onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
+          onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
+        />
+      </ModalTemplate>
     </>
   );
 }
@@ -132,79 +131,73 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
     : "";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-sm w-full p-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 border-b border-border">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base">Record Details</DialogTitle>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              typeLabel === "Income" ? "bg-success/15 text-success" :
-              typeLabel === "Transfer" ? "bg-blue-500/15 text-blue-400" :
-              "bg-danger/15 text-danger"
-            }`}>{typeLabel}</span>
-          </div>
-          <p className={`text-3xl font-bold tabular-nums mt-3 ${positive ? "text-success" : "text-danger"}`}>
-            {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
-          </p>
-        </DialogHeader>
+    <ModalTemplate
+      open={isOpen}
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      className="max-w-sm gap-4"
+      bodyClassName="px-4 sm:px-6 pt-0 pb-0 space-y-0"
+      title="Record Details"
+    >
+      <div className="space-y-3.5">
+        <p className={`text-3xl font-bold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
+          {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
+        </p>
 
-        <div className="px-4 sm:px-6 py-5 space-y-3.5">
-          <DetailRow label="Category">
-            <div className="flex items-center gap-2">
-              <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <HugeiconsIcon icon={categoryIcon} className="size-3" />
-              </div>
-              <span className="text-sm">{record.category?.name ?? "—"}</span>
-              {record.category?.group && (
-                <span className="text-xs text-muted">· {record.category.group.name}</span>
-              )}
+        <DetailRow label="Category">
+          <div className="flex items-center gap-2">
+            <div className="size-5 rounded-full bg-muted flex items-center justify-center shrink-0">
+              <HugeiconsIcon icon={categoryIcon} className="size-3" />
             </div>
-          </DetailRow>
-
-          <DetailRow label="Account">
-            <div className="flex items-center gap-2">
-              <HugeiconsIcon icon={accountIcon} className="size-4 shrink-0" style={{ color: accountColor }} />
-              <span className="text-sm">{record.accountName}</span>
-            </div>
-          </DetailRow>
-
-          <DetailRow label="Date">
-            <span className="text-sm">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</span>
-          </DetailRow>
-
-          <DetailRow label="Payment">
-            <span className="text-sm">{paymentLabel}</span>
-          </DetailRow>
-
-          <DetailRow label="Status">
-            <span className="text-sm">{stateLabel}</span>
-          </DetailRow>
-
-          {record.counterParty && (
-            <DetailRow label="Payer">
-              <span className="text-sm">{record.counterParty}</span>
-            </DetailRow>
-          )}
-
-          {record.note && (
-            <DetailRow label="Note">
-              <span className="text-sm text-muted">{record.note}</span>
-            </DetailRow>
-          )}
-        </div>
-
-        {onDuplicate && (
-          <div className="px-4 sm:px-6 pb-5">
-            <button
-              onClick={() => { onClose(); onDuplicate(); }}
-              className="w-full py-2 rounded-lg border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
-            >
-              Duplicate record
-            </button>
+            <span className="text-sm">{record.category?.name ?? "—"}</span>
+            {record.category?.group && (
+              <span className="text-xs text-muted">· {record.category.group.name}</span>
+            )}
           </div>
+        </DetailRow>
+
+        <DetailRow label="Account">
+          <div className="flex items-center gap-2">
+            <HugeiconsIcon icon={accountIcon} className="size-4 shrink-0" style={{ color: accountColor }} />
+            <span className="text-sm">{record.accountName}</span>
+          </div>
+        </DetailRow>
+
+        <DetailRow label="Date">
+          <span className="text-sm">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</span>
+        </DetailRow>
+
+        <DetailRow label="Payment">
+          <span className="text-sm">{paymentLabel}</span>
+        </DetailRow>
+
+        <DetailRow label="Status">
+          <span className="text-sm">{stateLabel}</span>
+        </DetailRow>
+
+        {record.counterParty && (
+          <DetailRow label="Payer">
+            <span className="text-sm">{record.counterParty}</span>
+          </DetailRow>
         )}
-      </DialogContent>
-    </Dialog>
+
+        {record.note && (
+          <DetailRow label="Note">
+            <span className="text-sm text-muted">{record.note}</span>
+          </DetailRow>
+        )}
+      </div>
+
+      {onDuplicate && (
+        <div className="pb-5">
+          <button
+            onClick={() => { onClose(); onDuplicate(); }}
+            className="w-full py-2 rounded-lg border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
+          >
+            Duplicate record
+          </button>
+        </div>
+      )}
+    </ModalTemplate>
   );
 }
 
@@ -220,22 +213,26 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
   onOpenRecord: (record: WalletRecord) => void;
 }) {
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-[720px] w-full p-0 max-h-[90vh] overflow-hidden flex flex-col">
-        <RecordForm
-          mode="add"
-          initialRecord={record}
-          token={token}
-          accounts={accounts}
-          records={records}
-          defaultAccountId={record.accountId}
-          onSuccess={() => { onClose(); onSuccess(); }}
-          onCancel={onClose}
-          onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
-          onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
-        />
-      </DialogContent>
-    </Dialog>
+    <ModalTemplate
+      open={isOpen}
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      title="Add record"
+      className="max-w-[720px] max-h-[90vh] flex flex-col gap-0"
+      bodyClassName="flex flex-col flex-1 min-h-0 p-0"
+    >
+      <RecordForm
+        mode="add"
+        initialRecord={record}
+        token={token}
+        accounts={accounts}
+        records={records}
+        defaultAccountId={record.accountId}
+        onSuccess={() => { onClose(); onSuccess(); }}
+        onCancel={onClose}
+        onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
+        onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
+      />
+    </ModalTemplate>
   );
 }
 
@@ -702,13 +699,6 @@ function RecordForm({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Header */}
-      <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 shrink-0">
-        <DialogTitle className="text-base font-semibold text-foreground">
-          {mode === "edit" ? "Edit record" : "Add record"}
-        </DialogTitle>
-      </DialogHeader>
-
       {/* Body */}
       <div className="px-4 sm:px-6 py-5 flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col lg:flex-row gap-6">

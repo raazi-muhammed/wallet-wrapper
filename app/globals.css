@@ -16,8 +16,8 @@
   --color-separator:       var(--color-border);
   --color-input:           var(--input);
   --color-ring:            var(--ring);
-  --color-popover:         var(--color-card);
-  --color-popover-foreground: var(--color-card-foreground);
+  --color-popover:         var(--color-secondary);
+  --color-popover-foreground: var(--color-secondary-foreground);
 
   /* ── Text ──────────────────────────────────── */
   /* This project uses `text-muted` directly as a text color (not just

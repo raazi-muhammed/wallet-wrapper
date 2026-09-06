@@ -119,14 +119,14 @@ function SettingsPopover({
           <HugeiconsIcon icon={Settings01Icon} className="size-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md w-full p-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-4 pb-2 text-center sm:text-center">
-          <DialogTitle className="text-base">Settings</DialogTitle>
+      <DialogContent className="max-w-md w-full p-0 overflow-hidden gap-1">
+        <DialogHeader className="px-6 pt-3.5 pb-1 text-left">
+          <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="px-4 sm:px-6 pt-2 pb-5 space-y-5">
+        <div className="px-4 pt-0 pb-4 space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground pl-4">API Connection</p>
+            <p className="text-sm font-medium text-muted pl-4">API Connection</p>
             <div className="rounded-xl bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm">
@@ -168,7 +168,7 @@ function SettingsPopover({
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground pl-4">Period</p>
+            <p className="text-sm font-medium text-muted pl-4">Period</p>
             <Select value={period} onValueChange={(v) => setPeriod(v as "3m" | "6m" | "1y" | "all")}>
               <SelectTrigger className="w-full rounded-xl bg-card border-0 px-4 py-3 h-auto text-sm">
                 <SelectValue />
@@ -183,7 +183,7 @@ function SettingsPopover({
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground pl-4">Theme</p>
+            <p className="text-sm font-medium text-muted pl-4">Theme</p>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { id: "system", label: "System" },
@@ -235,7 +235,7 @@ function SettingsPopover({
 
           {stats && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-foreground pl-4">API Usage Stats</p>
+              <p className="text-sm font-medium text-muted pl-4">API Usage Stats</p>
               <div className="rounded-xl overflow-hidden bg-card">
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex justify-between text-xs text-muted">

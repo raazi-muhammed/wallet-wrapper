@@ -1,35 +1,32 @@
 "use client";
 
-import { useState, useEffect, useRef, type ReactNode } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { ModalTemplate } from "@/templates/modal-template";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchCategories, fetchRecords, createRecords, patchRecord } from "../actions";
-import type { Account, Category, WalletRecord } from "../actions";
+import type { Account, WalletRecord } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 
-type RecordType = "expense" | "income" | "transfer";
+// RecordForm pulls in the category/account pickers, the date-time picker
+// (react-day-picker) and its own note/payer-suggestion queries — none of
+// that is needed until someone actually opens the add/edit dialog, so it's
+// loaded as a separate chunk on first open rather than bundled into every
+// records page.
+const RecordForm = dynamic(() => import("./RecordForm"), {
+  loading: () => <RecordFormSkeleton />,
+});
 
+function RecordFormSkeleton() {
+  return (
+    <div className="flex flex-1 min-h-0 items-center justify-center py-16">
+      <HugeiconsIcon icon={Loading03Icon} className="size-5 text-muted animate-spin" />
+    </div>
+  );
+}
 
-const PAYMENT_TYPES: { id: string; label: string }[] = [
+export const PAYMENT_TYPES: { id: string; label: string }[] = [
   { id: "cash", label: "Cash" },
   { id: "debit_card", label: "Debit Card" },
   { id: "credit_card", label: "Credit Card" },
@@ -38,24 +35,18 @@ const PAYMENT_TYPES: { id: string; label: string }[] = [
   { id: "mobile_payment", label: "Mobile Payment" },
   { id: "web_payment", label: "Web Payment" },
 ];
-const RECORD_STATES: { id: string; label: string }[] = [
+export const RECORD_STATES: { id: string; label: string }[] = [
   { id: "cleared", label: "Cleared" },
   { id: "uncleared", label: "Uncleared" },
   { id: "reconciled", label: "Reconciled" },
 ];
 
-function fmt(value: number, currency: string) {
+export function fmt(value: number, currency: string) {
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(value);
   } catch {
     return `${currency} ${value.toFixed(2)}`;
   }
-}
-
-function toDatetimeLocal(date: Date): string {
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60000);
-  return local.toISOString().slice(0, 16);
 }
 
 // ── Add Record Button ─────────────────────────────────────────────────────────
@@ -70,7 +61,7 @@ interface AddProps {
   onOpenRecord: (record: WalletRecord) => void;
 }
 
-export function AddRecordButton({ token, accounts, records, defaultAccountId, onSuccess, onGoToRecord, onOpenRecord }: AddProps) {
+export function AddRecordButton({ token, accounts, defaultAccountId, onSuccess, onOpenRecord }: AddProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -89,11 +80,8 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
           mode="add"
           token={token}
           accounts={accounts}
-          records={records}
           defaultAccountId={defaultAccountId}
           onSuccess={() => { setOpen(false); onSuccess(); }}
-          onCancel={() => setOpen(false)}
-          onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
           onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
         />
       </ModalTemplate>
@@ -142,6 +130,10 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
         <p className={`text-3xl font-bold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
           {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
         </p>
+
+        <DetailRow label="Type">
+          <span className="text-sm">{typeLabel}</span>
+        </DetailRow>
 
         <DetailRow label="Category">
           <div className="flex items-center gap-2">
@@ -201,7 +193,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   );
 }
 
-export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord, onOpenRecord }: {
+export function DuplicateRecordModal({ record, token, accounts, isOpen, onClose, onSuccess, onOpenRecord }: {
   record: WalletRecord;
   token: string;
   accounts: Account[];
@@ -225,11 +217,8 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
         initialRecord={record}
         token={token}
         accounts={accounts}
-        records={records}
         defaultAccountId={record.accountId}
         onSuccess={() => { onClose(); onSuccess(); }}
-        onCancel={onClose}
-        onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
         onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
       />
     </ModalTemplate>
@@ -241,725 +230,6 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
     <div className="flex items-start gap-4">
       <span className="text-xs text-muted w-16 shrink-0 pt-0.5">{label}</span>
       <div className="flex-1">{children}</div>
-    </div>
-  );
-}
-
-// ── Account Select ────────────────────────────────────────────────────────────
-
-function AccountSelect({
-  accounts,
-  value,
-  onChange,
-  placeholder = "Select account",
-}: {
-  accounts: Account[];
-  value: string;
-  onChange: (id: string) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const selected = accounts.find((a) => a.id === value);
-  const filtered = search.trim()
-    ? accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
-    : accounts;
-
-  function select(id: string) {
-    onChange(id);
-    setOpen(false);
-    setSearch("");
-  }
-
-  return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setTimeout(() => inputRef.current?.focus(), 50); }}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
-        >
-          {selected ? (
-            <span className="flex items-center gap-2 min-w-0">
-              {(() => { const icon = getAccountIcon(selected.accountType, selected.name); return <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: selected.color ?? "var(--muted-foreground)" }} />; })()}
-              <span className="truncate text-foreground">{selected.name}</span>
-            </span>
-          ) : (
-            <span className="text-muted">{placeholder}</span>
-          )}
-          <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="p-0 border-0 bg-card w-[var(--radix-popover-trigger-width)] pointer-events-auto overflow-hidden"
-        style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
-        align="start"
-        sideOffset={4}
-      >
-        <div className="p-2 shrink-0">
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search accounts…"
-            className="w-full rounded-lg border-0 bg-card text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
-          />
-        </div>
-        <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
-          {filtered.map((a, i) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => select(a.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${i === filtered.length - 1 ? "rounded-b-md" : ""} ${a.id === value ? "font-semibold text-accent" : "text-foreground"}`}
-            >
-              {(() => { const icon = getAccountIcon(a.accountType, a.name); return <HugeiconsIcon icon={icon} className="size-4 shrink-0" style={{ color: a.color ?? "var(--muted-foreground)" }} />; })()}
-              <span className="truncate">{a.name}</span>
-            </button>
-          ))}
-          {filtered.length === 0 && (
-            <p className="px-3 py-4 text-sm text-muted text-center">No accounts found</p>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Category Select ───────────────────────────────────────────────────────────
-
-function CategorySelect({
-  categories,
-  value,
-  onChange,
-}: {
-  categories: Category[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const selected = categories.find((c) => c.id === value);
-
-  const filtered = search.trim()
-    ? categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-    : categories;
-
-  const groups = new Map<string, { groupId: string; items: Category[] }>();
-  const ungrouped: Category[] = [];
-  for (const c of filtered) {
-    if (c.group) {
-      const existing = groups.get(c.group.name);
-      if (existing) {
-        existing.items.push(c);
-      } else {
-        groups.set(c.group.name, { groupId: c.group.id, items: [c] });
-      }
-    } else {
-      ungrouped.push(c);
-    }
-  }
-
-  function select(id: string) {
-    onChange(id);
-    setOpen(false);
-    setSearch("");
-  }
-
-  return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setTimeout(() => inputRef.current?.focus(), 50); }}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
-        >
-          {selected ? (
-            <span className="flex items-center gap-2 min-w-0">
-              {(() => {
-                const icon = getCategoryIcon(selected.name, selected.group?.name);
-                const color = selected.color ?? "#888";
-                return (
-                  <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                    <HugeiconsIcon icon={icon} className="size-3" />
-                  </span>
-                );
-              })()}
-              <span className="truncate">{selected.name}</span>
-            </span>
-          ) : (
-            <span className="text-muted">Select category</span>
-          )}
-          <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="p-0 border-0 bg-card w-[var(--radix-popover-trigger-width)] pointer-events-auto"
-        style={{ maxHeight: "min(280px, var(--radix-popover-content-available-height, 280px))", display: "flex", flexDirection: "column" }}
-        align="start"
-        sideOffset={4}
-      >
-        <div className="p-2 shrink-0">
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search categories…"
-            className="w-full rounded-lg border-0 bg-card text-foreground text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-          />
-        </div>
-        <div className="overflow-y-auto flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
-          {[...groups.entries()].map(([groupName, { items }]) => (
-            <div key={groupName}>
-              <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-                <span className="text-xs font-semibold text-muted uppercase tracking-wider">{groupName}</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-              {items.map((c) => {
-                const icon = getCategoryIcon(c.name, groupName);
-                const color = c.color ?? "#888";
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => select(c.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
-                  >
-                    <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                      <HugeiconsIcon icon={icon} className="size-3" />
-                    </span>
-                    <span className="truncate">{c.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-          {ungrouped.map((c) => {
-            const icon = getCategoryIcon(c.name);
-            const color = c.color ?? "#888";
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => select(c.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-default transition-colors ${c.id === value ? "font-semibold text-accent" : "text-foreground"}`}
-              >
-                <span className="size-6 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}26`, color }}>
-                  <HugeiconsIcon icon={icon} className="size-3" />
-                </span>
-                <span className="truncate">{c.name}</span>
-              </button>
-            );
-          })}
-          {filtered.length === 0 && (
-            <p className="px-3 py-4 text-sm text-muted text-center">No categories found</p>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Shared Form ───────────────────────────────────────────────────────────────
-
-function RecordForm({
-  mode,
-  initialRecord,
-  token,
-  accounts,
-  records,
-  defaultAccountId,
-  onSuccess,
-  onCancel,
-  onGoToRecord,
-  onOpenRecord,
-}: {
-  mode: "add" | "edit";
-  initialRecord?: WalletRecord;
-  token: string;
-  accounts: Account[];
-  records: WalletRecord[];
-  defaultAccountId?: string;
-  onSuccess: () => void;
-  onCancel: () => void;
-  onGoToRecord: (id: string) => void;
-  onOpenRecord: (record: WalletRecord) => void;
-}) {
-  const deriveType = (r?: WalletRecord): RecordType => {
-    const t = r?.recordType?.toLowerCase();
-    if (t === "expense" || t === "income" || t === "transfer") return t;
-    return "expense";
-  };
-
-  const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
-  const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
-  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? "");
-  const [toAccountId, setToAccountId] = useState("");
-  const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
-  const [note, setNote] = useState(() => initialRecord?.note ?? "");
-  const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
-  const [paymentType, setPaymentType] = useState<"cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment">(() => (initialRecord?.paymentType as never) ?? "cash");
-  const [recordState, setRecordState] = useState<"cleared" | "uncleared" | "reconciled">(() => (initialRecord?.recordState as never) ?? "cleared");
-  const [recordDate, setRecordDate] = useState<Date>(() => new Date());
-
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [debouncedNote, setDebouncedNote] = useState(note);
-  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [showPayerSuggestions, setShowPayerSuggestions] = useState(false);
-  const [debouncedPayer, setDebouncedPayer] = useState(payer);
-  const payerBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const selectedAccount = accounts.find((a) => a.id === accountId);
-  const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
-
-  // Debounce note for suggestions query
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedNote(note), 300);
-    return () => clearTimeout(t);
-  }, [note]);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedPayer(payer), 300);
-    return () => clearTimeout(t);
-  }, [payer]);
-
-  const { data: categories = [] } = useQuery({
-    queryKey: ["categories", token],
-    queryFn: () => fetchCategories(token),
-    enabled: !!token,
-    staleTime: 5 * 60_000,
-  });
-
-  const { data: apiSuggestions = [] } = useQuery({
-    queryKey: ["noteSuggestions", token, debouncedNote],
-    queryFn: async () => {
-      const q = debouncedNote.trim();
-      const [noteRes, cpRes] = await Promise.all([
-        fetchRecords(token, { from: "2000-01-01", limit: 10, note: q }),
-        fetchRecords(token, { from: "2000-01-01", limit: 10, counterParty: q }),
-      ]);
-      const seen = new Set<string>();
-      const merged: WalletRecord[] = [];
-      for (const r of [...noteRes.records, ...cpRes.records]) {
-        if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
-      }
-      return merged.slice(0, 10);
-    },
-    enabled: !!token && debouncedNote.trim().length > 0,
-    staleTime: 30_000,
-    placeholderData: [] as WalletRecord[],
-  });
-
-  const { data: apiPayerSuggestions = [] } = useQuery({
-    queryKey: ["payerSuggestions", token, debouncedPayer],
-    queryFn: async () => {
-      const q = debouncedPayer.trim();
-      const res = await fetchRecords(token, { from: "2000-01-01", limit: 20, counterParty: q });
-      const seen = new Set<string>();
-      const names: string[] = [];
-      for (const r of res.records) {
-        const cp = r.counterParty?.trim();
-        if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
-      }
-      return names.slice(0, 8);
-    },
-    enabled: !!token && debouncedPayer.trim().length > 0,
-    staleTime: 30_000,
-    placeholderData: [] as string[],
-  });
-
-  useEffect(() => {
-    if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
-  }, [accounts, accountId, defaultAccountId]);
-
-  const filteredCategories = categories.filter((c) => {
-    if (recordType === "transfer") return true;
-    if (!c.categoryType) return true;
-    return c.categoryType.toLowerCase() === recordType;
-  });
-
-  const suggestions = (() => {
-    if (!note.trim()) return [];
-    const seen = new Set<string>();
-    const results: WalletRecord[] = [];
-    for (const r of apiSuggestions) {
-      if (mode === "edit" && r.id === initialRecord?.id) continue;
-      const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      results.push(r);
-    }
-    return results;
-  })();
-
-  function applySuggestion(r: WalletRecord) {
-    setNote(r.note ?? "");
-    setPayer(r.counterParty ?? "");
-    if (amount === undefined) setAmount(Math.abs(r.amount.value));
-    if (!accountId) setAccountId(r.accountId);
-    if (r.category?.id) setCategoryId(r.category.id);
-    const rt = deriveType(r);
-    setRecordType(rt);
-    setPaymentType(r.paymentType ?? "cash");
-    const editableStates = ["cleared", "uncleared", "reconciled"] as const;
-    if (r.recordState && (editableStates as readonly string[]).includes(r.recordState)) {
-      setRecordState(r.recordState as typeof editableStates[number]);
-    }
-    setShowSuggestions(false);
-  }
-
-  function handleNoteBlur() {
-    blurTimer.current = setTimeout(() => setShowSuggestions(false), 150);
-  }
-
-  function handleSuggestionMouseDown() {
-    if (blurTimer.current) clearTimeout(blurTimer.current);
-  }
-
-  function handlePayerBlur() {
-    payerBlurTimer.current = setTimeout(() => setShowPayerSuggestions(false), 150);
-  }
-
-  function handlePayerSuggestionMouseDown() {
-    if (payerBlurTimer.current) clearTimeout(payerBlurTimer.current);
-  }
-
-  function setDateToday() {
-    const d = new Date();
-    d.setHours(recordDate.getHours(), recordDate.getMinutes());
-    setRecordDate(d);
-  }
-
-  function setDateYesterday() {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    d.setHours(recordDate.getHours(), recordDate.getMinutes());
-    setRecordDate(d);
-  }
-
-  const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
-    mutationFn: async (addAnother: boolean | "sameDate") => {
-      if (amount === undefined || !accountId) throw new Error("Missing required fields");
-
-      const base = {
-        note: note || undefined,
-        counterParty: payer || undefined,
-        recordDate: recordDate.toISOString(),
-        paymentType,
-        recordState,
-        ...(categoryId ? { categoryId } : {}),
-      };
-
-      if (mode === "edit" && initialRecord) {
-        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        await patchRecord(token, initialRecord.id, {
-          ...base,
-          accountId,
-          amount: { value: signedAmount, currencyCode },
-        });
-      } else if (recordType === "transfer" && toAccountId) {
-        await createRecords(token, [
-          { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode } },
-          { ...base, accountId: toAccountId, amount: { value: Math.abs(amount), currencyCode } },
-        ]);
-      } else {
-        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        await createRecords(token, [
-          { ...base, accountId, amount: { value: signedAmount, currencyCode } },
-        ]);
-      }
-
-      return addAnother;
-    },
-    onSuccess: (addAnother) => {
-      if (addAnother === "sameDate") {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
-      } else if (addAnother) {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
-        setRecordDate(new Date());
-      } else {
-        onSuccess();
-      }
-    },
-  });
-
-  const error = submitError instanceof Error ? submitError.message : "";
-
-  function submit(addAnother: boolean | "sameDate") {
-    resetSubmitError();
-    runSubmit(addAnother);
-  }
-
-  return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Body */}
-      <div className="px-4 sm:px-6 py-5 flex-1 min-h-0 overflow-y-auto">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left column */}
-          <div className="flex-1 space-y-4">
-            <Tabs value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
-              <TabsList className="bg-card w-full">
-                <TabsTrigger
-                  value="expense"
-                  className="flex-1 data-[state=active]:bg-danger data-[state=active]:text-white"
-                >
-                  Expense
-                </TabsTrigger>
-                <TabsTrigger
-                  value="income"
-                  className="flex-1 data-[state=active]:bg-success data-[state=active]:text-white"
-                >
-                  Income
-                </TabsTrigger>
-                <TabsTrigger value="transfer" className="flex-1">
-                  Transfer
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">
-                Amount <span className="text-danger">*</span>
-              </label>
-              <div className="flex gap-2">
-                <div className="flex flex-1 rounded-lg border-0 bg-card overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setAmount((v) => Math.max(0, (v ?? 0) - 1))}
-                    className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={amount ?? ""}
-                    onChange={(e) => setAmount(e.target.value === "" ? undefined : Number(e.target.value))}
-                    placeholder="0.00"
-                    aria-label="Amount"
-                    className="flex-1 min-w-0 bg-transparent text-center text-foreground text-sm focus:outline-none px-2 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAmount((v) => (v ?? 0) + 1)}
-                    className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="w-20 flex items-center justify-center rounded-lg border-0 bg-card px-3 text-sm font-mono text-muted">
-                  {currencyCode}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Account</label>
-              <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
-            </div>
-
-            {recordType === "transfer" && (
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">To Account</label>
-                <AccountSelect
-                  accounts={accounts.filter((a) => a.id !== accountId)}
-                  value={toAccountId}
-                  onChange={setToAccountId}
-                  placeholder="Select account"
-                />
-              </div>
-            )}
-
-            {recordType !== "transfer" && (
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Category</label>
-                <CategorySelect categories={filteredCategories} value={categoryId} onChange={setCategoryId} />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>
-              <DateTimePicker value={recordDate} onChange={setRecordDate} />
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={setDateToday}
-                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={setDateYesterday}
-                  className="text-xs px-2.5 py-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
-                >
-                  Yesterday
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Right column */}
-          <div className="lg:w-72 space-y-4">
-            <div className="relative">
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Note</label>
-              <Textarea
-                placeholder="Describe your record"
-                value={note}
-                onChange={(e) => { setNote(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => note.trim() && setShowSuggestions(true)}
-                onBlur={handleNoteBlur}
-                aria-label="Note"
-                aria-autocomplete="list"
-                aria-expanded={showSuggestions && suggestions.length > 0}
-                rows={3}
-                className="text-foreground placeholder:text-muted rounded-lg resize-none"
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <div onMouseDown={handleSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border-0 bg-card shadow-lg overflow-hidden">
-                  {suggestions.map((r) => {
-                    const positive = r.amount.value > 0;
-                    return (
-                      <div key={r.id} className="flex items-center hover:bg-default transition-colors">
-                        <button type="button" onClick={() => applySuggestion(r)} className="flex-1 px-3 py-2.5 text-left min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{r.note || "—"}</p>
-                          {(r.counterParty || r.category) && (
-                            <p className="text-xs text-muted truncate">
-                              {[r.counterParty, r.category?.name].filter(Boolean).join(" · ")}
-                            </p>
-                          )}
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="text-xs text-muted truncate">{r.accountName}{r.category ? ` · ${r.category.name}` : ""}</p>
-                            <span className={`text-xs font-mono shrink-0 ${positive ? "text-success" : "text-danger"}`}>
-                              {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
-                            </span>
-                          </div>
-                        </button>
-                        <button type="button" onClick={() => onOpenRecord(r)} title="Go to this record" className="px-2 py-2.5 text-muted hover:text-foreground transition-colors shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
-              <Input
-                value={payer}
-                onChange={(e) => { setPayer(e.target.value); setShowPayerSuggestions(true); }}
-                onFocus={() => payer.trim() && setShowPayerSuggestions(true)}
-                onBlur={handlePayerBlur}
-                aria-label="Payer"
-                aria-autocomplete="list"
-                aria-expanded={showPayerSuggestions && apiPayerSuggestions.length > 0}
-                className="text-foreground placeholder:text-muted rounded-lg"
-              />
-              {showPayerSuggestions && apiPayerSuggestions.length > 0 && (
-                <div onMouseDown={handlePayerSuggestionMouseDown} className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border-0 bg-card shadow-lg overflow-hidden">
-                  {apiPayerSuggestions.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => { setPayer(name); setShowPayerSuggestions(false); }}
-                      className="w-full px-3 py-2.5 text-left text-sm text-foreground hover:bg-default transition-colors truncate"
-                    >
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
-              <Select value={paymentType} onValueChange={(v) => setPaymentType(v as typeof paymentType)}>
-                <SelectTrigger className="w-full rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TYPES.map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="text-foreground focus:bg-default focus:text-foreground">
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
-              <Select value={recordState} onValueChange={(v) => setRecordState(v as typeof recordState)}>
-                <SelectTrigger className="w-full rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RECORD_STATES.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-foreground focus:bg-default focus:text-foreground">
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger-soft-foreground">
-            {error}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 sm:px-6 pb-6 pt-2 flex flex-col sm:flex-row gap-2 shrink-0">
-        {mode === "add" && (
-          <div className="grid grid-cols-2 gap-2 sm:contents">
-            <Button
-              variant="card"
-              className="sm:flex-1"
-              onClick={() => submit(true)}
-              disabled={amount === undefined || !accountId || submitting}
-            >
-              Add another
-            </Button>
-            <Button
-              variant="card"
-              className="sm:flex-1"
-              onClick={() => submit("sameDate")}
-              disabled={amount === undefined || !accountId || submitting}
-            >
-              Add, keep date
-            </Button>
-          </div>
-        )}
-        <Button
-          className={mode === "add" ? "sm:flex-1" : "w-full"}
-          onClick={() => submit(false)}
-          disabled={amount === undefined || !accountId || submitting}
-        >
-          {submitting ? (
-            <span className="flex items-center gap-2">
-              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" /> Saving…
-            </span>
-          ) : (
-            mode === "edit" ? "Save changes" : "Add record"
-          )}
-        </Button>
-      </div>
     </div>
   );
 }

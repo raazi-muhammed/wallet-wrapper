@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  AlertCircleIcon,
+  CircleDashedIcon,
   Search01Icon,
   Cancel01Icon,
   ArrowLeft01Icon,
@@ -58,6 +60,10 @@ function maskToken(token: string) {
   return `${token.slice(0, 4)}${"•".repeat(8)}${token.slice(-4)}`;
 }
 
+// Stable reference so a not-yet-loaded query's `?? []` fallback doesn't
+// itself count as "the list changed" for memoized derivations downstream.
+const EMPTY_RECORDS: WalletRecord[] = [];
+
 function periodFrom(period: "3m" | "6m" | "1y" | "all") {
   if (period === "all") return "2000-01-01";
   const d = new Date();
@@ -95,7 +101,15 @@ export function SettingsPopover({
   const [draft, setDraft] = useState(token);
   const { theme, setTheme } = useTheme();
 
-  useEffect(() => { setDraft(token); }, [token]);
+  // Keep the draft input in sync with `token` (e.g. after a disconnect)
+  // without the extra render pass a `useEffect` would add: adjusting state
+  // during render, guarded by a "previous prop" ref, is the pattern React
+  // itself recommends for resetting state when a prop changes.
+  const [prevToken, setPrevToken] = useState(token);
+  if (token !== prevToken) {
+    setPrevToken(token);
+    setDraft(token);
+  }
 
   const used = stats ? stats.rateLimit - stats.rateLimitRemaining : null;
   const pct = stats ? Math.round((used! / stats.rateLimit) * 100) : null;
@@ -304,12 +318,42 @@ function groupByDate(records: WalletRecord[]) {
   return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
 }
 
-function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: WalletRecord[]; accounts: Account[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
+function RecordsTable({
+  records,
+  accounts,
+  highlightedId,
+  onEdit,
+  isSearching,
+  searchTerm,
+}: {
+  records: WalletRecord[];
+  accounts: Account[];
+  highlightedId?: string;
+  onEdit?: (r: WalletRecord) => void;
+  isSearching?: boolean;
+  searchTerm?: string;
+}) {
+  // Grouping/summing is O(n) over what can be several hundred loaded
+  // records; memoized so an unrelated re-render (e.g. `highlightedId`
+  // clearing itself after its timeout) doesn't redo it for an unchanged list.
+  const groups = useMemo(() => groupByDate(records), [records]);
+
   if (records.length === 0) {
-    return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
+    return (
+      <div className="flex flex-col items-center gap-2 py-16 text-center">
+        <HugeiconsIcon icon={isSearching ? Search01Icon : CircleDashedIcon} className="size-6 text-muted" />
+        <p className="text-sm font-medium text-foreground">
+          {isSearching ? "No matches found" : "No records yet"}
+        </p>
+        <p className="text-xs text-muted">
+          {isSearching
+            ? `Nothing matches "${searchTerm}" — try a different note or payee.`
+            : "Records you add will show up here."}
+        </p>
+      </div>
+    );
   }
 
-  const groups = groupByDate(records);
   let rowIndex = -1;
 
   return (
@@ -443,7 +487,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+  const { data: accounts = [], isLoading: accountsLoading, isError: accountsError } = useQuery({
     queryKey: ["accounts", token],
     queryFn: () => fetchAccounts(token),
     enabled: !!token,
@@ -481,7 +525,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
 
   const isSearching = debouncedSearch.trim().length > 0;
 
-  const { data: searchResults = [], isFetching: searchFetching } = useQuery({
+  const { data: searchData, isFetching: searchFetching } = useQuery({
     queryKey: ["search", token, debouncedSearch],
     queryFn: async () => {
       const [noteRes, cpRes] = await Promise.all([
@@ -493,11 +537,16 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       for (const r of [...noteRes.records, ...cpRes.records]) {
         if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
       }
-      return merged;
+      // Each field is capped at 200 matches server-side; a `nextOffset` on
+      // either means there are more matches than shown, so the result count
+      // below shouldn't read as an exhaustive total.
+      return { records: merged, truncated: !!noteRes.nextOffset || !!cpRes.nextOffset };
     },
     enabled: !!token && isSearching,
     staleTime: 30_000,
   });
+  const searchResults = searchData?.records ?? EMPTY_RECORDS;
+  const searchTruncated = searchData?.truncated ?? false;
 
   // ── Navigation ───────────────────────────────────────────────────────────────
 
@@ -515,10 +564,15 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
 
   // ── Derived state ────────────────────────────────────────────────────────────
 
-  const records = recordsData?.pages.flatMap((p) => p.records) ?? [];
-  const sorted = (list: WalletRecord[]) =>
-    [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
-  const displayedRecords = sorted(isSearching ? searchResults : records);
+  // Sorting/flattening can run over thousands of records once a few "Load
+  // more" pages have accumulated — memoized so typing in the search box or
+  // a highlight timeout elsewhere in this component doesn't re-sort an
+  // unchanged records list on every render.
+  const records = useMemo(() => recordsData?.pages.flatMap((p) => p.records) ?? [], [recordsData]);
+  const displayedRecords = useMemo(() => {
+    const list = isSearching ? searchResults : records;
+    return [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
+  }, [isSearching, searchResults, records]);
   const activeAccounts = accounts.filter((a) => !a.archived);
   const selectedAccountName =
     accountId === undefined
@@ -551,6 +605,16 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     );
   }
 
+  if (accountsError && activeAccounts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+        <HugeiconsIcon icon={AlertCircleIcon} className="size-8 text-danger" />
+        <p className="text-foreground font-medium">Couldn&apos;t load your accounts</p>
+        <p className="text-muted text-sm">Your token may be invalid or expired. Check it in Settings.</p>
+      </div>
+    );
+  }
+
   if (!(activeAccounts.length > 0 || records.length > 0)) {
     return null;
   }
@@ -571,7 +635,9 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           </h2>
           {isSearching && (
             <p className="text-xs text-muted mt-0.5">
-              {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"`}
+              {searchFetching
+                ? "Searching…"
+                : `${displayedRecords.length}${searchTruncated ? "+" : ""} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"${searchTruncated ? " — narrow your search to see more" : ""}`}
             </p>
           )}
         </div>
@@ -601,7 +667,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           className="w-full pl-9 pr-8 py-2 text-sm rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:bg-default-hover transition-colors"
         />
         {searchInput && (
-          <button onClick={() => setSearchInput("")} className="absolute right-3 text-muted hover:text-foreground">
+          <button onClick={() => setSearchInput("")} aria-label="Clear search" className="absolute right-3 text-muted hover:text-foreground">
             <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
           </button>
         )}
@@ -615,6 +681,8 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           accounts={accounts}
           highlightedId={highlightedId}
           onEdit={setEditingRecord}
+          isSearching={isSearching}
+          searchTerm={debouncedSearch}
         />
       )}
 

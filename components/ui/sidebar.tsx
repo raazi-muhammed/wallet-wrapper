@@ -661,10 +661,12 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // Random width between 50 to 90%. `useState`'s lazy initializer (not
+  // `useMemo`) is the correct place for this: `useMemo` is only a
+  // performance hint React is allowed to discard and recompute, which for
+  // an impure value like `Math.random()` would make the skeleton's width
+  // change on renders it has no business changing on.
+  const [width] = React.useState(() => `${Math.floor(Math.random() * 40) + 50}%`)
 
   return (
     <div

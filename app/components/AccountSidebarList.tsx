@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  AlertCircleIcon,
   ChevronRightIcon,
   LayoutListIcon,
   SparklesIcon,
@@ -74,6 +75,16 @@ function SidebarSkeleton() {
         </SidebarGroup>
       </SidebarContent>
     </>
+  );
+}
+
+function SidebarError() {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+      <HugeiconsIcon icon={AlertCircleIcon} className="size-5 text-danger" />
+      <p className="text-sm font-medium text-foreground">Couldn&apos;t load accounts</p>
+      <p className="text-xs text-muted">Your token may be invalid or expired. Check it in Settings.</p>
+    </div>
   );
 }
 
@@ -168,7 +179,7 @@ export function AccountSidebarList() {
   const { token, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
   const pathname = usePathname();
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+  const { data: accounts = [], isLoading: accountsLoading, isError: accountsError } = useQuery({
     queryKey: ["accounts", token],
     queryFn: () => fetchAccounts(token),
     enabled: !!token,
@@ -188,6 +199,8 @@ export function AccountSidebarList() {
   let content: React.ReactNode;
   if (initialLoading) {
     content = <SidebarSkeleton />;
+  } else if (accountsError && activeAccounts.length === 0) {
+    content = <SidebarError />;
   } else if (activeAccounts.length > 0) {
     content = <SidebarBody accounts={activeAccounts} pathname={pathname} />;
   } else {

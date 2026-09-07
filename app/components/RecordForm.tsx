@@ -258,6 +258,7 @@ export default function RecordForm({
   accounts,
   defaultAccountId,
   onSuccess,
+  onOpenRecord,
 }: {
   mode: "add" | "edit";
   initialRecord?: WalletRecord;
@@ -265,6 +266,7 @@ export default function RecordForm({
   accounts: Account[];
   defaultAccountId?: string;
   onSuccess: () => void;
+  onOpenRecord?: (record: WalletRecord) => void;
 }) {
   const deriveType = (r?: WalletRecord): RecordType => {
     const t = r?.recordType?.toLowerCase();
@@ -599,8 +601,8 @@ export default function RecordForm({
                   {suggestions.map((r) => {
                     const positive = r.amount.value > 0;
                     return (
-                      <button key={r.id} type="button" onClick={() => applySuggestion(r)} className="w-full flex items-center hover:bg-default transition-colors text-left">
-                        <span className="flex-1 px-3 py-2.5 min-w-0">
+                      <div key={r.id} className="flex items-center hover:bg-default transition-colors">
+                        <button type="button" onClick={() => applySuggestion(r)} className="flex-1 px-3 py-2.5 text-left min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{r.note || "—"}</p>
                           {(r.counterParty || r.category) && (
                             <p className="text-xs text-muted truncate">
@@ -613,8 +615,21 @@ export default function RecordForm({
                               {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
                             </span>
                           </span>
-                        </span>
-                      </button>
+                        </button>
+                        {onOpenRecord && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenRecord(r)}
+                            aria-label="Go to this record"
+                            title="Go to this record"
+                            className="px-2 py-2.5 text-muted hover:text-foreground transition-colors shrink-0"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

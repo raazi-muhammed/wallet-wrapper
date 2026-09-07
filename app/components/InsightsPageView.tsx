@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { fetchAccounts } from "../actions";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
@@ -153,7 +153,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
 export function InsightsPageView() {
   const { token, handleSave } = useDashboard();
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+  const { data: accounts = [], isLoading: accountsLoading, isError: accountsError } = useQuery({
     queryKey: ["accounts", token],
     queryFn: () => fetchAccounts(token),
     enabled: !!token,
@@ -174,6 +174,16 @@ export function InsightsPageView() {
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (accountsError && activeAccounts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+        <HugeiconsIcon icon={AlertCircleIcon} className="size-8 text-danger" />
+        <p className="text-foreground font-medium">Couldn&apos;t load your accounts</p>
+        <p className="text-muted text-sm">Your token may be invalid or expired. Check it in Settings.</p>
       </div>
     );
   }

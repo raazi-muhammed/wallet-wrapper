@@ -61,7 +61,7 @@ interface AddProps {
   onOpenRecord: (record: WalletRecord) => void;
 }
 
-export function AddRecordButton({ token, accounts, defaultAccountId, onSuccess }: AddProps) {
+export function AddRecordButton({ token, accounts, defaultAccountId, onSuccess, onOpenRecord }: AddProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -82,6 +82,7 @@ export function AddRecordButton({ token, accounts, defaultAccountId, onSuccess }
           accounts={accounts}
           defaultAccountId={defaultAccountId}
           onSuccess={() => { setOpen(false); onSuccess(); }}
+          onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
         />
       </ModalTemplate>
     </>
@@ -192,7 +193,7 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   );
 }
 
-export function DuplicateRecordModal({ record, token, accounts, isOpen, onClose, onSuccess }: {
+export function DuplicateRecordModal({ record, token, accounts, isOpen, onClose, onSuccess, onOpenRecord }: {
   record: WalletRecord;
   token: string;
   accounts: Account[];
@@ -218,6 +219,7 @@ export function DuplicateRecordModal({ record, token, accounts, isOpen, onClose,
         accounts={accounts}
         defaultAccountId={record.accountId}
         onSuccess={() => { onClose(); onSuccess(); }}
+        onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
       />
     </ModalTemplate>
   );

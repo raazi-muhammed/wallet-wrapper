@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -77,6 +78,19 @@ function SidebarSkeleton() {
 }
 
 function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: string }) {
+  const groupedAccounts = useMemo(
+    () =>
+      Array.from(
+        accounts.reduce((map, a) => {
+          const type = a.accountType || "Other";
+          if (!map.has(type)) map.set(type, []);
+          map.get(type)!.push(a);
+          return map;
+        }, new Map<string, typeof accounts>())
+      ).sort(([a], [b]) => a.localeCompare(b)),
+    [accounts]
+  );
+
   return (
     <>
       <SidebarContent className="pt-1 pb-4">
@@ -103,14 +117,7 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {Array.from(
-          accounts.reduce((map, a) => {
-            const type = a.accountType || "Other";
-            if (!map.has(type)) map.set(type, []);
-            map.get(type)!.push(a);
-            return map;
-          }, new Map<string, typeof accounts>())
-        ).sort(([a], [b]) => a.localeCompare(b)).map(([type, accs]) => {
+        {groupedAccounts.map(([type, accs]) => {
           return (
             <SidebarGroup key={type} className="px-4 pt-0">
               <SidebarGroupLabel className="text-xs font-semibold tracking-widest text-sidebar-foreground/50 px-2">

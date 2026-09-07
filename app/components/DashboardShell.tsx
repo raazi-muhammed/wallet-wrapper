@@ -8,11 +8,23 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import {
-  useDashboard,
-  SIDEBAR_PERCENT_MIN,
-  SIDEBAR_PERCENT_MAX,
-} from "./DashboardProvider";
+
+// A pixel width has no relationship to how wide the viewport actually is —
+// persisted from a desktop session, it can exceed a phone's entire screen,
+// so the sidebar is sized as a *percentage* of the available space instead.
+// Percentages are inherently safe at any viewport width, with no client
+// measurement (and its "window.innerWidth reads 0 for a moment" pitfalls)
+// required.
+const SIDEBAR_WIDTH_STORAGE_KEY = "wallet_sidebar_percent";
+const SIDEBAR_PERCENT_DEFAULT = 20;
+export const SIDEBAR_PERCENT_MIN = 15;
+export const SIDEBAR_PERCENT_MAX = 50;
+
+function getInitialSidebarWidthPercent() {
+  if (typeof window === "undefined") return SIDEBAR_PERCENT_DEFAULT;
+  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+  return stored >= SIDEBAR_PERCENT_MIN && stored <= SIDEBAR_PERCENT_MAX ? stored : SIDEBAR_PERCENT_DEFAULT;
+}
 
 // Below the md breakpoint there's no room for a side-by-side split — only
 // one of sidebar/detail is shown at a time, driven by the route
@@ -30,14 +42,22 @@ export function DashboardShell({
   detail: React.ReactNode;
 }) {
   const isDetailActive = usePathname() !== "/";
-  const { sidebarWidthPercent, setSidebarWidthPercent } = useDashboard();
-  // `defaultSize` is a mount-only hint, not a controlled "current size" prop —
-  // it must never be re-fed the live `sidebarWidthPercent`. `onResize` updates
-  // that state on every drag frame; passing the updated value straight back
-  // into `defaultSize` fights the drag as it happens (the panel's own live
-  // size and the "reset to this size" hint racing each other), which
-  // produces a "snaps to a fixed width instead of tracking the drag" symptom.
-  const [initialSidebarWidthPercent] = useState(() => sidebarWidthPercent);
+  // `defaultSize` is a mount-only hint, not a controlled "current size" prop,
+  // so the persisted width only ever needs to be read once, here, at mount —
+  // it doesn't need to live in React state at all. `onResize` fires on every
+  // drag frame; it used to funnel through DashboardContext so the width could
+  // be seeded from state, but that meant every pixel of dragging re-rendered
+  // the *entire* dashboard tree (sidebar list, records list, everything) via
+  // context, purely to keep a value in sync that nothing ever reads back
+  // reactively. Persisting straight to localStorage on each frame, with no
+  // state update, keeps the drag itself (which react-resizable-panels already
+  // renders imperatively) perfectly smooth.
+  const [initialSidebarWidthPercent] = useState(getInitialSidebarWidthPercent);
+
+  function persistSidebarWidth(percent: number) {
+    const clamped = Math.min(SIDEBAR_PERCENT_MAX, Math.max(SIDEBAR_PERCENT_MIN, percent));
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clamped));
+  }
 
   return (
     <SidebarProvider>
@@ -56,7 +76,7 @@ export function DashboardShell({
           defaultSize={String(initialSidebarWidthPercent)}
           minSize={String(SIDEBAR_PERCENT_MIN)}
           maxSize={String(SIDEBAR_PERCENT_MAX)}
-          onResize={(size) => setSidebarWidthPercent(size.asPercentage)}
+          onResize={(size) => persistSidebarWidth(size.asPercentage)}
         >
           {sidebar}
         </ResizablePanel>

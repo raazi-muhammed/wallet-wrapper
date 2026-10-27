@@ -97,6 +97,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ["allRecords", token] });
     queryClient.invalidateQueries({ queryKey: ["accounts", token] });
     queryClient.invalidateQueries({ queryKey: ["stats", token] });
+    queryClient.invalidateQueries({ queryKey: ["search", token] });
+    queryClient.invalidateQueries({ queryKey: ["categories", token] });
+    queryClient.invalidateQueries({ queryKey: ["labels", token] });
+    queryClient.invalidateQueries({ queryKey: ["budgets", token] });
   }
 
   return (

@@ -25,6 +25,7 @@ import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { useDashboard } from "./DashboardProvider";
 import { SettingsPopover } from "./AccountRecordsView";
+import { ManageDataModal } from "./ManageDataModal";
 
 function fmt(amount: number | undefined, currency: string | undefined) {
   if (amount == null || !currency) return "—";
@@ -197,14 +198,17 @@ export function AccountSidebarList() {
     <Sidebar collapsible="none" className="h-full w-full">
       <div className="flex items-center justify-between pl-6 pr-4 pt-2 shrink-0">
         <span className="font-display text-xl font-bold text-sidebar-primary">Wallet</span>
-        <SettingsPopover
-          token={token}
-          stats={stats}
-          period={period}
-          setPeriod={setPeriod}
-          onSave={handleSave}
-          onDisconnect={handleDisconnect}
-        />
+        <div className="flex items-center">
+          <ManageDataModal />
+          <SettingsPopover
+            token={token}
+            stats={stats}
+            period={period}
+            setPeriod={setPeriod}
+            onSave={handleSave}
+            onDisconnect={handleDisconnect}
+          />
+        </div>
       </div>
       {content}
     </Sidebar>

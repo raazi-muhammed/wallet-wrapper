@@ -1,8 +1,18 @@
 "use client";
 
-import { infiniteQueryOptions, queryOptions, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createLabel } from "@/app/actions";
-import { fetchAccounts, fetchApiStats, fetchCategories, fetchLabels, fetchRecords } from "@/lib/wallet-fetch";
+import {
+  fetchAccounts,
+  fetchBudgets,
+  fetchCategories,
+  fetchLabels,
+  fetchRecords,
+  fetchStandingOrderItems,
+  fetchStandingOrders,
+  type AccountsData,
+} from "@/lib/wallet-fetch";
+import { queryKeys } from "@/lib/query-keys";
 import { unwrap } from "@/app/components/EditControls";
 
 export type Period = "3m" | "6m" | "1y" | "all";
@@ -18,41 +28,62 @@ export function periodFrom(period: Period) {
 
 // Shared query definitions, so prefetches and the components that read them use identical keys.
 
-export const accountsQuery = (token: string) =>
+// Accounts and API stats arrive in one response; these two read their half of it.
+const selectAccounts = (data: AccountsData) => data.accounts;
+const selectStats = (data: AccountsData) => data.stats;
+
+const accountsDataQuery = (session: string) =>
   queryOptions({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
+    queryKey: queryKeys.accounts(session),
+    queryFn: fetchAccounts,
+    enabled: !!session,
   });
 
-export const statsQuery = (token: string) =>
+export const accountsQuery = (session: string) => queryOptions({ ...accountsDataQuery(session), select: selectAccounts });
+
+export const statsQuery = (session: string) => queryOptions({ ...accountsDataQuery(session), select: selectStats });
+
+export const categoriesQuery = (session: string) =>
   queryOptions({
-    queryKey: ["stats", token],
-    queryFn: () => fetchApiStats(token),
-    enabled: !!token,
+    queryKey: queryKeys.categories(session),
+    queryFn: fetchCategories,
+    enabled: !!session,
   });
 
-export const categoriesQuery = (token: string) =>
+export const labelsQuery = (session: string) =>
   queryOptions({
-    queryKey: ["categories", token],
-    queryFn: () => fetchCategories(token),
-    enabled: !!token,
-    staleTime: 5 * 60_000,
+    queryKey: queryKeys.labels(session),
+    queryFn: fetchLabels,
+    enabled: !!session,
   });
 
-export const labelsQuery = (token: string) =>
+export const budgetsQuery = (session: string) =>
   queryOptions({
-    queryKey: ["labels", token],
-    queryFn: () => fetchLabels(token),
-    enabled: !!token,
-    staleTime: 5 * 60_000,
+    queryKey: queryKeys.budgets(session),
+    queryFn: fetchBudgets,
+    enabled: !!session,
   });
 
-export const recordsQuery = (token: string, accountId: string | undefined, period: Period) =>
+export const standingOrdersQuery = (session: string) =>
+  queryOptions({
+    queryKey: queryKeys.standingOrders(session),
+    queryFn: fetchStandingOrders,
+    enabled: !!session,
+  });
+
+/** Occurrences of every standing order from `from` (ISO date) on. */
+export const standingOrderItemsQuery = (session: string, from: string) =>
+  queryOptions({
+    queryKey: queryKeys.standingOrderItems(session, from),
+    queryFn: () => fetchStandingOrderItems(`${from}T00:00:00Z`),
+    enabled: !!session,
+  });
+
+export const recordsQuery = (session: string, accountId: string | undefined, period: Period) =>
   infiniteQueryOptions({
-    queryKey: ["records", token, accountId, period],
+    queryKey: queryKeys.records(session, accountId, period),
     queryFn: ({ pageParam }) =>
-      fetchRecords(token, {
+      fetchRecords({
         accountId,
         from: periodFrom(period),
         offset: pageParam,
@@ -60,32 +91,24 @@ export const recordsQuery = (token: string, accountId: string | undefined, perio
       }),
     getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
     initialPageParam: 0,
-    enabled: !!token,
+    enabled: !!session,
   });
 
-/** Starts the fetches every dashboard page needs, so they're in flight before the components mount. */
-export function prefetchDashboardData(queryClient: QueryClient, token: string) {
-  void queryClient.prefetchQuery(accountsQuery(token));
-  void queryClient.prefetchQuery(statsQuery(token));
-  void queryClient.prefetchQuery(categoriesQuery(token));
-  void queryClient.prefetchQuery(labelsQuery(token));
+export function useCategories(session: string) {
+  return useQuery(categoriesQuery(session));
 }
 
-export function useCategories(token: string) {
-  return useQuery(categoriesQuery(token));
-}
-
-export function useLabels(token: string) {
-  return useQuery(labelsQuery(token));
+export function useLabels(session: string) {
+  return useQuery(labelsQuery(session));
 }
 
 /** Returns a callback suited to LabelSelect's `onCreate`: creates the label, refreshes the list, then reports the new id. */
-export function useCreateLabel(token: string, onCreated?: (id: string) => void) {
+export function useCreateLabel(session: string, onCreated?: (id: string) => void) {
   const queryClient = useQueryClient();
   return async (name: string) => {
-    const result = await createLabel(token, { name });
+    const result = await createLabel({ name });
     unwrap(result);
-    await queryClient.invalidateQueries({ queryKey: ["labels", token] });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.labels(session) });
     if (result.id) onCreated?.(result.id);
   };
 }

@@ -9,29 +9,30 @@ import { patchRecords, deleteRecords } from "../actions";
 import type { Account, WalletRecord } from "../actions";
 import type { PatchRecordItem } from "@/lib/wallet-client";
 import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
-import { AccountSelect, CategorySelect, RECORD_STATES, recordDeleteGroup } from "./AddRecordModal";
+import { AccountSelect, CategorySelect } from "./AddRecordModal";
+import { RECORD_STATES, recordDeleteGroup } from "@/lib/records";
 import { ErrorBox, FieldLabel, LabelSelect, unwrap } from "./EditControls";
 
 type EditableState = (typeof RECORD_STATES)[number]["id"];
 
 // ── Bulk edit modal ───────────────────────────────────────────────────────────
 
-function BulkEditModal({ token, records, accounts, isOpen, onClose, onSuccess }: {
-  token: string;
+function BulkEditModal({ session, records, accounts, isOpen, onClose, onSuccess }: {
+  session: string;
   records: WalletRecord[];
   accounts: Account[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { data: categories = [] } = useCategories(token);
-  const { data: labels = [] } = useLabels(token);
+  const { data: categories = [] } = useCategories(session);
+  const { data: labels = [] } = useLabels(session);
   const [categoryId, setCategoryId] = useState("");
   const [addLabelIds, setAddLabelIds] = useState<string[]>([]);
   const [removeLabelIds, setRemoveLabelIds] = useState<string[]>([]);
   const [recordState, setRecordState] = useState<EditableState | "">("");
   const [accountId, setAccountId] = useState("");
-  const createLabel = useCreateLabel(token, (id) => setAddLabelIds((ids) => [...ids, id]));
+  const createLabel = useCreateLabel(session, (id) => setAddLabelIds((ids) => [...ids, id]));
 
   // Moves are only allowed off non-bank-synced accounts, into one with the same currency.
   const target = accounts.find((a) => a.id === accountId);
@@ -61,7 +62,7 @@ function BulkEditModal({ token, records, accounts, isOpen, onClose, onSuccess }:
         if (accountId && movable(r)) patch.accountId = accountId;
         if (Object.keys(patch).length > 1) patches.push(patch);
       }
-      if (patches.length > 0) unwrap(await patchRecords(token, patches));
+      if (patches.length > 0) unwrap(await patchRecords(patches));
     },
     onSuccess: () => { onClose(); onSuccess(); },
   });
@@ -130,8 +131,8 @@ function BulkEditModal({ token, records, accounts, isOpen, onClose, onSuccess }:
 
 // ── Selection bar ─────────────────────────────────────────────────────────────
 
-export function BulkActionBar({ token, selected, accounts, onSelectAll, onClear, onDone }: {
-  token: string;
+export function BulkActionBar({ session, selected, accounts, onSelectAll, onClear, onDone }: {
+  session: string;
   selected: WalletRecord[];
   accounts: Account[];
   onSelectAll: () => void;
@@ -150,7 +151,7 @@ export function BulkActionBar({ token, selected, accounts, onSelectAll, onClear,
         g.forEach((id) => seen.add(id));
         return true;
       });
-      unwrap(await deleteRecords(token, groups));
+      unwrap(await deleteRecords(groups));
     },
     onSuccess: () => { setConfirmingDelete(false); onDone(); },
   });
@@ -181,7 +182,7 @@ export function BulkActionBar({ token, selected, accounts, onSelectAll, onClear,
       <ErrorBox error={deleteError} />
       {editing && (
         <BulkEditModal
-          token={token}
+          session={session}
           records={selected}
           accounts={accounts}
           isOpen={editing}

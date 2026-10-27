@@ -29,24 +29,14 @@ import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
 import { ErrorBox, LabelChip, LabelSelect, ToggleRow, unwrap } from "./EditControls";
+import { formatMoney } from "@/lib/format";
+import { RECORD_STATES, recordDeleteGroup, type EditableState } from "@/lib/records";
 
 type RecordType = "expense" | "income" | "transfer";
-type EditableState = "cleared" | "uncleared" | "reconciled";
 type ClearableField = NonNullable<PatchRecordItem["$clear"]>[number];
 
-export const RECORD_STATES: { id: EditableState; label: string }[] = [
-  { id: "cleared", label: "Cleared" },
-  { id: "uncleared", label: "Uncleared" },
-  { id: "reconciled", label: "Reconciled" },
-];
-
-function fmt(value: number, currency: string) {
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
+/** Single characters match nearly everything, so suggestions wait for a second one. */
+const MIN_SUGGESTION_QUERY_LENGTH = 2;
 
 function toDatetimeLocal(date: Date): string {
   const offset = date.getTimezoneOffset();
@@ -54,54 +44,42 @@ function toDatetimeLocal(date: Date): string {
   return local.toISOString().slice(0, 16);
 }
 
-// ── Add Record Button ─────────────────────────────────────────────────────────
+// ── Add Record Modal ──────────────────────────────────────────────────────────
 
-interface AddProps {
-  token: string;
+export function AddRecordModal({ session, accounts, defaultAccountId, isOpen, onClose, onSuccess, onOpenRecord }: {
+  session: string;
   accounts: Account[];
-  records: WalletRecord[];
   defaultAccountId?: string;
+  isOpen: boolean;
+  onClose: () => void;
   onSuccess: () => void;
-  onGoToRecord: (id: string) => void;
   onOpenRecord: (record: WalletRecord) => void;
-}
-
-export function AddRecordButton({ token, accounts, records, defaultAccountId, onSuccess, onGoToRecord, onOpenRecord }: AddProps) {
-  const [open, setOpen] = useState(false);
-
+}) {
   return (
-    <>
-      <Button onClick={() => setOpen(true)} disabled={!token}>
-        + Add Record
-      </Button>
-      <ModalTemplate
-        open={open}
-        onOpenChange={setOpen}
-        title="Add record"
-        className="max-w-[720px] max-h-[90vh] flex flex-col gap-0"
-        bodyClassName="flex flex-col flex-1 min-h-0 p-0"
-      >
-        <RecordForm
-          mode="add"
-          token={token}
-          accounts={accounts}
-          records={records}
-          defaultAccountId={defaultAccountId}
-          onSuccess={() => { setOpen(false); onSuccess(); }}
-          onCancel={() => setOpen(false)}
-          onGoToRecord={(id) => { setOpen(false); onGoToRecord(id); }}
-          onOpenRecord={(rec) => { setOpen(false); onOpenRecord(rec); }}
-        />
-      </ModalTemplate>
-    </>
+    <ModalTemplate
+      open={isOpen}
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      title="Add record"
+      className="max-w-[720px] max-h-[90vh] flex flex-col gap-0"
+      bodyClassName="flex flex-col flex-1 min-h-0 p-0"
+    >
+      <RecordForm
+        mode="add"
+        session={session}
+        accounts={accounts}
+        defaultAccountId={defaultAccountId}
+        onSuccess={() => { onClose(); onSuccess(); }}
+        onCancel={onClose}
+        onOpenRecord={onOpenRecord}
+      />
+    </ModalTemplate>
   );
 }
 
 // ── Record Detail Modal ───────────────────────────────────────────────────────
 
-export function RecordDetailModal({ record, token, accounts, isOpen, onClose, onDuplicate, onEdit, onDeleted }: {
+export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplicate, onEdit, onDeleted }: {
   record: WalletRecord;
-  token: string;
   accounts: Account[];
   isOpen: boolean;
   onClose: () => void;
@@ -112,7 +90,7 @@ export function RecordDetailModal({ record, token, accounts, isOpen, onClose, on
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { mutate: runDelete, isPending: deleting, error: deleteError } = useMutation({
     // Paired transfers can only be deleted together with their mirror record.
-    mutationFn: async () => unwrap(await deleteRecords(token, [recordDeleteGroup(record)])),
+    mutationFn: async () => unwrap(await deleteRecords([recordDeleteGroup(record)])),
     onSuccess: () => { onClose(); onDeleted?.(); },
   });
 
@@ -145,7 +123,7 @@ export function RecordDetailModal({ record, token, accounts, isOpen, onClose, on
     >
       <div className="space-y-3.5">
         <p className={`text-3xl font-bold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
-          {positive ? "+" : ""}{fmt(record.amount.value, record.amount.currencyCode)}
+          {positive ? "+" : ""}{formatMoney(record.amount.value, record.amount.currencyCode)}
         </p>
 
         <DetailRow label="Category">
@@ -234,15 +212,13 @@ export function RecordDetailModal({ record, token, accounts, isOpen, onClose, on
   );
 }
 
-export function DuplicateRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onGoToRecord, onOpenRecord }: {
+export function DuplicateRecordModal({ record, session, accounts, isOpen, onClose, onSuccess, onOpenRecord }: {
   record: WalletRecord;
-  token: string;
+  session: string;
   accounts: Account[];
-  records: WalletRecord[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  onGoToRecord: (id: string) => void;
   onOpenRecord: (record: WalletRecord) => void;
 }) {
   return (
@@ -256,24 +232,21 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
       <RecordForm
         mode="add"
         initialRecord={record}
-        token={token}
+        session={session}
         accounts={accounts}
-        records={records}
         defaultAccountId={record.accountId}
         onSuccess={() => { onClose(); onSuccess(); }}
         onCancel={onClose}
-        onGoToRecord={(id) => { onClose(); onGoToRecord(id); }}
         onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
       />
     </ModalTemplate>
   );
 }
 
-export function EditRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onOpenRecord }: {
+export function EditRecordModal({ record, session, accounts, isOpen, onClose, onSuccess, onOpenRecord }: {
   record: WalletRecord;
-  token: string;
+  session: string;
   accounts: Account[];
-  records: WalletRecord[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -290,12 +263,10 @@ export function EditRecordModal({ record, token, accounts, records, isOpen, onCl
       <RecordForm
         mode="edit"
         initialRecord={record}
-        token={token}
+        session={session}
         accounts={accounts}
-        records={records}
         onSuccess={() => { onClose(); onSuccess(); }}
         onCancel={onClose}
-        onGoToRecord={onClose}
         onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
       />
     </ModalTemplate>
@@ -535,11 +506,6 @@ export function CategorySelect({
   );
 }
 
-/** The ids to delete for a record: a paired transfer goes together with its mirror. */
-export function recordDeleteGroup(record: WalletRecord) {
-  return record.transfer?.mirrorId ? [record.id, record.transfer.mirrorId] : [record.id];
-}
-
 // ── Edit patch ────────────────────────────────────────────────────────────────
 
 /**
@@ -608,24 +574,20 @@ function buildRecordPatch(original: WalletRecord, next: {
 function RecordForm({
   mode,
   initialRecord,
-  token,
+  session,
   accounts,
-  records,
   defaultAccountId,
   onSuccess,
   onCancel,
-  onGoToRecord,
   onOpenRecord,
 }: {
   mode: "add" | "edit";
   initialRecord?: WalletRecord;
-  token: string;
+  session: string;
   accounts: Account[];
-  records: WalletRecord[];
   defaultAccountId?: string;
   onSuccess: () => void;
   onCancel: () => void;
-  onGoToRecord: (id: string) => void;
   onOpenRecord: (record: WalletRecord) => void;
 }) {
   const deriveType = (r?: WalletRecord): RecordType => {
@@ -683,17 +645,17 @@ function RecordForm({
     return () => clearTimeout(t);
   }, [payer]);
 
-  const { data: categories = [] } = useCategories(token);
-  const { data: labels = [] } = useLabels(token);
-  const createLabel = useCreateLabel(token, (id) => setLabelIds((ids) => [...ids, id]));
+  const { data: categories = [] } = useCategories(session);
+  const { data: labels = [] } = useLabels(session);
+  const createLabel = useCreateLabel(session, (id) => setLabelIds((ids) => [...ids, id]));
 
   const { data: apiSuggestions = [] } = useQuery({
-    queryKey: ["noteSuggestions", token, debouncedNote],
+    queryKey: ["noteSuggestions", session, debouncedNote],
     queryFn: async () => {
       const q = debouncedNote.trim();
       const [noteRes, cpRes] = await Promise.all([
-        fetchRecords(token, { from: "2000-01-01", limit: 10, note: q }),
-        fetchRecords(token, { from: "2000-01-01", limit: 10, counterParty: q }),
+        fetchRecords({ from: "2000-01-01", limit: 10, note: q }),
+        fetchRecords({ from: "2000-01-01", limit: 10, counterParty: q }),
       ]);
       const seen = new Set<string>();
       const merged: WalletRecord[] = [];
@@ -702,16 +664,16 @@ function RecordForm({
       }
       return merged.slice(0, 10);
     },
-    enabled: !!token && debouncedNote.trim().length > 0,
+    enabled: !!session && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
   });
 
   const { data: apiPayerSuggestions = [] } = useQuery({
-    queryKey: ["payerSuggestions", token, debouncedPayer],
+    queryKey: ["payerSuggestions", session, debouncedPayer],
     queryFn: async () => {
       const q = debouncedPayer.trim();
-      const res = await fetchRecords(token, { from: "2000-01-01", limit: 20, counterParty: q });
+      const res = await fetchRecords({ from: "2000-01-01", limit: 20, counterParty: q });
       const seen = new Set<string>();
       const names: string[] = [];
       for (const r of res.records) {
@@ -720,7 +682,7 @@ function RecordForm({
       }
       return names.slice(0, 8);
     },
-    enabled: !!token && debouncedPayer.trim().length > 0,
+    enabled: !!session && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as string[],
   });
@@ -810,7 +772,7 @@ function RecordForm({
           lockAmountDateState: pairedTransfer,
           unlinkTransfer,
         });
-        if (patch) unwrap(await patchRecords(token, [patch]));
+        if (patch) unwrap(await patchRecords([patch]));
         return addAnother;
       }
 
@@ -826,12 +788,12 @@ function RecordForm({
 
       if (recordType === "transfer" && toAccountId) {
         // One record plus `pairingMode: "new"` makes the API create the linked mirror on the target account.
-        unwrap(await createRecords(token, [
+        unwrap(await createRecords([
           { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode }, transfer: { pairingMode: "new", accountId: toAccountId } },
         ]));
       } else {
         const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        unwrap(await createRecords(token, [
+        unwrap(await createRecords([
           { ...base, accountId, amount: { value: signedAmount, currencyCode } },
         ]));
       }
@@ -1020,7 +982,7 @@ function RecordForm({
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="text-xs text-muted truncate">{r.accountName}{r.category ? ` · ${r.category.name}` : ""}</p>
                             <span className={`text-xs font-mono shrink-0 ${positive ? "text-success" : "text-danger"}`}>
-                              {positive ? "+" : ""}{fmt(r.amount.value, r.amount.currencyCode)}
+                              {positive ? "+" : ""}{formatMoney(r.amount.value, r.amount.currencyCode)}
                             </span>
                           </div>
                         </button>

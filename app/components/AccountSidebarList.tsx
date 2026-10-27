@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -7,6 +9,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Calendar03Icon,
   ChevronRightIcon,
+  Database01Icon,
   LayoutListIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
@@ -21,22 +24,15 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { accountsQuery, recordsQuery, statsQuery } from "@/hooks/use-wallet-data";
+import { useIdlePreload } from "@/hooks/use-idle-preload";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { useDashboard } from "./DashboardProvider";
-import { SettingsPopover } from "./AccountRecordsView";
-import { ManageDataModal } from "./ManageDataModal";
+import { SettingsPopover } from "./SettingsPopover";
 import { ErrorBox } from "./EditControls";
-
-function fmt(amount: number | undefined, currency: string | undefined) {
-  if (amount == null || !currency) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
+import { formatMoney } from "@/lib/format";
 
 function SidebarSkeleton() {
   return (
@@ -80,10 +76,10 @@ function SidebarSkeleton() {
 }
 
 function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: string }) {
-  const { token, period } = useDashboard();
+  const { session, period } = useDashboard();
   const queryClient = useQueryClient();
   // Start loading an account's records on hover, so they're usually ready by the time it's clicked.
-  const prefetchRecords = (accountId?: string) => queryClient.prefetchInfiniteQuery(recordsQuery(token, accountId, period));
+  const prefetchRecords = (accountId?: string) => queryClient.prefetchInfiniteQuery(recordsQuery(session, accountId, period));
 
   return (
     <>
@@ -153,7 +149,7 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{a.name}</p>
                               <p className={`text-xs tabular-nums ${bal < 0 ? "text-danger" : "text-sidebar-foreground/50"}`}>
-                                {fmt(bal, a.balance.currencyCode)}
+                                {formatMoney(bal, a.balance.currencyCode)}
                               </p>
                             </div>
                           </Link>
@@ -175,17 +171,48 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
   );
 }
 
+// The modal (and its forms) loads on first open; until then the sidebar only needs this button.
+const ManageDataModal = dynamic(() => import("./ManageDataModal").then((m) => m.ManageDataModal));
+
+function preloadManageData() {
+  void import("./ManageDataModal");
+}
+
+function ManageDataButton() {
+  const [open, setOpen] = useState(false);
+  // Mounted from the first open on, so later closes keep the dialog's exit animation.
+  const [opened, setOpened] = useState(false);
+  useIdlePreload(preloadManageData);
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Manage accounts, categories, labels and budgets"
+        title="Manage data"
+        aria-expanded={open}
+        onClick={() => { setOpen(true); setOpened(true); }}
+        className="rounded-full text-muted hover:bg-secondary dark:hover:bg-secondary aria-expanded:bg-secondary focus-visible:border-transparent focus-visible:ring-0"
+      >
+        <HugeiconsIcon icon={Database01Icon} className="size-4" />
+      </Button>
+      {opened && <ManageDataModal open={open} onOpenChange={setOpen} />}
+    </>
+  );
+}
+
 export function AccountSidebarList() {
-  const { token, tokenReady, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
+  const { session, maskedToken, tokenReady, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
   const pathname = usePathname();
 
-  const { data: accounts = [], isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(token));
-  const { data: stats = null } = useQuery(statsQuery(token));
+  const { data: accounts = [], isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(session));
+  const { data: stats = null } = useQuery(statsQuery(session));
 
   const activeAccounts = accounts.filter((a) => !a.archived);
-  const initialLoading = !tokenReady || (!!token && accountsLoading && activeAccounts.length === 0);
+  const initialLoading = !tokenReady || (!!session && accountsLoading && activeAccounts.length === 0);
 
-  if (tokenReady && !token) return null;
+  if (tokenReady && !session) return null;
 
   let content: React.ReactNode;
   if (initialLoading) {
@@ -213,9 +240,10 @@ export function AccountSidebarList() {
       <div className="flex items-center justify-between pl-6 pr-4 pt-2 shrink-0">
         <span className="font-display text-xl font-bold text-sidebar-primary">Wallet</span>
         <div className="flex items-center">
-          <ManageDataModal />
+          <ManageDataButton />
           <SettingsPopover
-            token={token}
+            connected={!!session}
+            maskedToken={maskedToken}
             stats={stats}
             period={period}
             setPeriod={setPeriod}

@@ -9,6 +9,7 @@ import {
   fetchStandingOrders,
   fetchStandingOrderItems,
 } from "@/lib/wallet-reads";
+import { readToken } from "@/lib/session";
 
 type Params = URLSearchParams;
 
@@ -39,8 +40,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ reso
   const read = readers[resource];
   if (!read) return Response.json({ error: `Unknown resource: ${resource}` }, { status: 404 });
 
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return Response.json({ error: "Missing token" }, { status: 401 });
+  const token = await readToken();
+  if (!token) return Response.json({ error: "Not connected" }, { status: 401 });
 
   try {
     return Response.json(await read(token, new URL(request.url).searchParams));

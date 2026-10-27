@@ -1,7 +1,9 @@
 "use server";
 
 import axios from "axios";
+import { refresh } from "next/cache";
 import { createWalletClient, batchError, chunk } from "@/lib/wallet-client";
+import { readToken, writeToken } from "@/lib/session";
 import type {
   CreateRecordRequest,
   PatchRecordItem,
@@ -15,6 +17,10 @@ import type {
 } from "@/lib/wallet-client";
 export type { Account, WalletRecord, Category, Label, Budget, StandingOrder, StandingOrderItem, ApiStats, WalletColor } from "@/lib/wallet-client";
 
+type WalletClient = ReturnType<typeof createWalletClient>;
+
+const NOT_CONNECTED = "Not connected. Add your API token in Settings.";
+
 /** Result of a write action. Errors are returned, not thrown, so their text survives production builds. */
 export type WriteResult = { error: string | null };
 
@@ -26,58 +32,82 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Runs batch writes of up to 10 items each, stopping at the first batch that reports a failure. */
-async function writeBatches<T>(items: T[], send: (batch: T[]) => Promise<Parameters<typeof batchError>[0]>): Promise<WriteResult> {
-  try {
-    for (const batch of chunk(items)) {
-      const error = batchError(await send(batch));
-      if (error) return { error };
+/** Batches sent at once. Enough to overlap round trips without bursting through the rate limit. */
+const WRITE_CONCURRENCY = 3;
+
+/**
+ * Sends batches of up to 10 items, a few at a time. After the first batch that
+ * reports a failure no more are started (batches already in flight still finish).
+ */
+async function runBatches<T>(batches: T[][], send: (client: WalletClient, batch: T[]) => Promise<Parameters<typeof batchError>[0]>): Promise<WriteResult> {
+  const token = await readToken();
+  if (!token) return { error: NOT_CONNECTED };
+  const client = createWalletClient(token);
+  let next = 0;
+  let error: string | null = null;
+  async function worker() {
+    while (!error && next < batches.length) {
+      const batch = batches[next++];
+      try {
+        error ??= batchError(await send(client, batch));
+      } catch (e) {
+        error ??= errorMessage(e);
+      }
     }
-    return { error: null };
-  } catch (e) {
-    return { error: errorMessage(e) };
   }
+  await Promise.all(Array.from({ length: Math.min(WRITE_CONCURRENCY, batches.length) }, worker));
+  return { error };
 }
 
-async function writeOne(send: () => Promise<unknown>): Promise<WriteResult> {
+async function writeOne(send: (client: WalletClient) => Promise<unknown>): Promise<WriteResult> {
+  const token = await readToken();
+  if (!token) return { error: NOT_CONNECTED };
   try {
-    await send();
+    await send(createWalletClient(token));
     return { error: null };
   } catch (e) {
     return { error: errorMessage(e) };
   }
 }
 
-export async function createRecords(token: string, records: CreateRecordRequest[]) {
-  const client = createWalletClient(token);
-  return writeBatches(records, (batch) => client.createRecords(batch));
+/** Stores the token in its httpOnly cookie and re-renders the dashboard with that account's data. */
+export async function connect(token: string) {
+  await writeToken(token.trim());
+  refresh();
 }
 
-export async function patchRecords(token: string, items: PatchRecordItem[]) {
-  const client = createWalletClient(token);
-  return writeBatches(items, (batch) => client.patchRecords(batch));
+export async function disconnect() {
+  await writeToken(null);
+  refresh();
 }
 
-export async function patchAccounts(token: string, items: PatchAccountItem[]) {
-  const client = createWalletClient(token);
-  return writeBatches(items, (batch) => client.patchAccounts(batch));
+export async function createRecords(records: CreateRecordRequest[]) {
+  return runBatches(chunk(records), (client, batch) => client.createRecords(batch));
 }
 
-export async function patchCategories(token: string, items: PatchCategoryItem[]) {
-  const client = createWalletClient(token);
-  return writeBatches(items, (batch) => client.patchCategories(batch));
+export async function patchRecords(items: PatchRecordItem[]) {
+  return runBatches(chunk(items), (client, batch) => client.patchRecords(batch));
 }
 
-export async function createSubcategory(token: string, body: CreateSubcategoryRequest) {
-  return writeOne(() => createWalletClient(token).createSubcategory(body));
+export async function patchAccounts(items: PatchAccountItem[]) {
+  return runBatches(chunk(items), (client, batch) => client.patchAccounts(batch));
 }
 
-export async function patchLabels(token: string, items: PatchLabelItem[]) {
-  const client = createWalletClient(token);
-  return writeBatches(items, (batch) => client.patchLabels(batch));
+export async function patchCategories(items: PatchCategoryItem[]) {
+  return runBatches(chunk(items), (client, batch) => client.patchCategories(batch));
 }
 
-export async function createLabel(token: string, body: CreateLabelRequest): Promise<WriteResult & { id?: string }> {
+export async function createSubcategory(body: CreateSubcategoryRequest) {
+  return writeOne((client) => client.createSubcategory(body));
+}
+
+export async function patchLabels(items: PatchLabelItem[]) {
+  return runBatches(chunk(items), (client, batch) => client.patchLabels(batch));
+}
+
+export async function createLabel(body: CreateLabelRequest): Promise<WriteResult & { id?: string }> {
+  const token = await readToken();
+  if (!token) return { error: NOT_CONNECTED };
   try {
     const { label } = await createWalletClient(token).createLabel(body);
     return { error: null, id: label?.id };
@@ -86,35 +116,24 @@ export async function createLabel(token: string, body: CreateLabelRequest): Prom
   }
 }
 
-export async function patchBudgets(token: string, items: PatchBudgetItem[]) {
-  const client = createWalletClient(token);
-  return writeBatches(items, (batch) => client.patchBudgets(batch));
+export async function patchBudgets(items: PatchBudgetItem[]) {
+  return runBatches(chunk(items), (client, batch) => client.patchBudgets(batch));
 }
 
-export async function deleteEntities(token: string, type: DeletableType, ids: string[]) {
-  const client = createWalletClient(token);
-  return writeBatches(ids, (batch) => client.deleteEntities(type, batch));
+export async function deleteEntities(type: DeletableType, ids: string[]) {
+  return runBatches(chunk(ids), (client, batch) => client.deleteEntities(type, batch));
 }
 
 /**
  * Deletes records given as groups: a paired transfer's two legs must share a
  * request, so groups are packed whole into batches of up to 10 ids.
  */
-export async function deleteRecords(token: string, groups: string[][]) {
+export async function deleteRecords(groups: string[][]) {
   const batches: string[][] = [];
   for (const group of groups) {
     const last = batches[batches.length - 1];
     if (last && last.length + group.length <= 10) last.push(...group);
     else batches.push([...group]);
   }
-  const client = createWalletClient(token);
-  try {
-    for (const batch of batches) {
-      const error = batchError(await client.deleteEntities("records", batch));
-      if (error) return { error };
-    }
-    return { error: null };
-  } catch (e) {
-    return { error: errorMessage(e) };
-  }
+  return runBatches(batches, (client, batch) => client.deleteEntities("records", batch));
 }

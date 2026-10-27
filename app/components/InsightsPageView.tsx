@@ -4,21 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { fetchAccounts } from "@/lib/wallet-fetch";
+import { accountsQuery } from "@/hooks/use-wallet-data";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
-
-function fmt(amount: number | undefined, currency: string | undefined) {
-  if (amount == null || !currency) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
+import { formatMoney } from "@/lib/format";
 
 function CreditUsageBar({ pct }: { pct: number }) {
   const color = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warning" : "bg-success";
@@ -75,7 +67,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
                 <div className="flex items-center justify-between text-xs">
                   <div className="space-y-0.5">
                     <p className="text-muted">Used</p>
-                    <p className="font-semibold text-foreground tabular-nums">{fmt(used, a.balance.currencyCode)}</p>
+                    <p className="font-semibold text-foreground tabular-nums">{formatMoney(used, a.balance.currencyCode)}</p>
                   </div>
                   <div className="space-y-0.5 text-center">
                     <p className="text-muted">Usage</p>
@@ -83,7 +75,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
                   </div>
                   <div className="space-y-0.5 text-right">
                     <p className="text-muted">Limit</p>
-                    <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? fmt(limit, a.balance.currencyCode) : "—"}</p>
+                    <p className="font-semibold text-foreground tabular-nums">{limit > 0 ? formatMoney(limit, a.balance.currencyCode) : "—"}</p>
                   </div>
                 </div>
               </div>
@@ -97,7 +89,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
               <div className="flex items-center justify-between text-xs">
                 <div className="space-y-0.5">
                   <p className="text-muted">Used</p>
-                  <p className="font-semibold text-foreground tabular-nums">{fmt(totalUsed, creditCards[0].balance.currencyCode)}</p>
+                  <p className="font-semibold text-foreground tabular-nums">{formatMoney(totalUsed, creditCards[0].balance.currencyCode)}</p>
                 </div>
                 <div className="space-y-0.5 text-center">
                   <p className="text-muted">Usage</p>
@@ -107,7 +99,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
                 </div>
                 <div className="space-y-0.5 text-right">
                   <p className="text-muted">Limit</p>
-                  <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? fmt(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
+                  <p className="font-semibold text-foreground tabular-nums">{totalLimit > 0 ? formatMoney(totalLimit, creditCards[0].balance.currencyCode) : "—"}</p>
                 </div>
               </div>
             </div>
@@ -130,7 +122,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
                   <span className="text-sm font-medium text-foreground">{a.name}</span>
                 </div>
                 <span className={`text-sm font-semibold tabular-nums ${bal < 0 ? "text-danger" : "text-foreground"}`}>
-                  {fmt(bal, a.balance.currencyCode)}
+                  {formatMoney(bal, a.balance.currencyCode)}
                 </span>
               </div>
             );
@@ -140,7 +132,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
             <div className="rounded-xl p-4 flex items-center justify-between border border-border bg-card-2">
               <span className="text-xs font-semibold text-muted uppercase tracking-widest">Total</span>
               <span className={`text-sm font-semibold tabular-nums ${currentAccountsTotal < 0 ? "text-danger" : "text-foreground"}`}>
-                {fmt(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}
+                {formatMoney(currentAccountsTotal, currentAccounts[0].balance.currencyCode)}
               </span>
             </div>
           )}
@@ -151,18 +143,14 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
 }
 
 export function InsightsPageView() {
-  const { token, tokenReady, handleSave } = useDashboard();
+  const { session, tokenReady, handleSave } = useDashboard();
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
-  });
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery(accountsQuery(session));
 
   const activeAccounts = accounts.filter((a) => !a.archived);
-  const initialLoading = !tokenReady || (!!token && accountsLoading && activeAccounts.length === 0);
+  const initialLoading = !tokenReady || (!!session && accountsLoading && activeAccounts.length === 0);
 
-  if (tokenReady && !token) {
+  if (tokenReady && !session) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 

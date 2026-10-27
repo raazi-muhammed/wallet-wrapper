@@ -1,331 +1,90 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState, useEffect } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { keepPreviousData, useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
   Cancel01Icon,
   ArrowLeft01Icon,
-  Settings01Icon,
   Tick02Icon,
   PencilEdit02Icon,
   CheckListIcon,
 } from "@hugeicons/core-free-icons";
 import { patchRecords } from "../actions";
 import { fetchRecords } from "@/lib/wallet-fetch";
-import { accountsQuery, recordsQuery } from "@/hooks/use-wallet-data";
-import type { Account, WalletRecord, ApiStats } from "../actions";
-import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
-import { AddRecordButton, RecordDetailModal, DuplicateRecordModal, EditRecordModal, RECORD_STATES } from "./AddRecordModal";
-import { BulkActionBar } from "./RecordBulkActions";
-import { AccountEditModal } from "./AccountEditModal";
+import { accountsQuery, recordsQuery, type Period } from "@/hooks/use-wallet-data";
+import { useIdlePreload } from "@/hooks/use-idle-preload";
+import type { Account, WalletRecord } from "../actions";
+import { ICON_BG_COLORS, getCategoryIcon, getAccountIcon, hashStr } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
+import { RECORD_STATES } from "@/lib/records";
 import { ErrorBox, LabelChip, unwrap } from "./EditControls";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModalTemplate } from "@/templates/modal-template";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard, useDashboardSearch } from "./DashboardProvider";
 
+// Modals and the bulk action bar only appear after a click, so their code
+// (forms, date picker, calendar) loads separately; useIdlePreload below
+// fetches it in the background once the page has settled.
+const AddRecordModal = dynamic(() => import("./AddRecordModal").then((m) => m.AddRecordModal));
+const RecordDetailModal = dynamic(() => import("./AddRecordModal").then((m) => m.RecordDetailModal));
+const EditRecordModal = dynamic(() => import("./AddRecordModal").then((m) => m.EditRecordModal));
+const DuplicateRecordModal = dynamic(() => import("./AddRecordModal").then((m) => m.DuplicateRecordModal));
+const AccountEditModal = dynamic(() => import("./AccountEditModal").then((m) => m.AccountEditModal));
+const BulkActionBar = dynamic(() => import("./RecordBulkActions").then((m) => m.BulkActionBar));
+
+function preloadRecordModals() {
+  void import("./AddRecordModal");
+  void import("./AccountEditModal");
+  void import("./RecordBulkActions");
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmt(amount: number | undefined, currency: string | undefined) {
-  if (amount == null || !currency) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
+const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const longDateFormat = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long", day: "numeric" });
 
-function fmtRelative(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
-
-function fmtDateLong(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-}
-
-function maskToken(token: string) {
-  if (token.length <= 8) return "•".repeat(token.length);
-  return `${token.slice(0, 4)}${"•".repeat(8)}${token.slice(-4)}`;
-}
-
-const PERIOD_LABELS: Record<"3m" | "6m" | "1y" | "all", string> = {
+const PERIOD_LABELS: Record<Period, string> = {
   "3m": "3 months",
   "6m": "6 months",
   "1y": "1 year",
   all: "all time",
 };
 
-// ── Settings Popover ──────────────────────────────────────────────────────────
-
-export function SettingsPopover({
-  token,
-  stats,
-  period,
-  setPeriod,
-  onSave,
-  onDisconnect,
-}: {
-  token: string;
-  stats: ApiStats | null;
-  period: "3m" | "6m" | "1y" | "all";
-  setPeriod: (p: "3m" | "6m" | "1y" | "all") => void;
-  onSave: (t: string) => void;
-  onDisconnect: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(token);
-  const { theme, setTheme } = useTheme();
-
-  useEffect(() => { setDraft(token); }, [token]);
-
-  const used = stats ? stats.rateLimit - stats.rateLimitRemaining : null;
-  const pct = stats ? Math.round((used! / stats.rateLimit) * 100) : null;
-
-  function handleSaveAndClose(t: string) {
-    onSave(t);
-    setOpen(false);
-  }
-
-  function handleDisconnectAndClose() {
-    onDisconnect();
-    setOpen(false);
-  }
-
-  return (
-    <ModalTemplate
-      open={open}
-      onOpenChange={setOpen}
-      title="Settings"
-      trigger={
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Settings"
-          className="rounded-full text-muted hover:bg-secondary dark:hover:bg-secondary aria-expanded:bg-secondary focus-visible:border-transparent focus-visible:ring-0"
-        >
-          <HugeiconsIcon icon={Settings01Icon} className="size-4" />
-        </Button>
-      }
-    >
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted pl-4">API Connection</p>
-        <div className="rounded-xl bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className={`size-2 rounded-full ${token ? "bg-success" : "bg-muted"}`} />
-              <span className="text-foreground font-medium">{token ? "Connected" : "Not connected"}</span>
-            </div>
-            {token && (
-              <button
-                onClick={handleDisconnectAndClose}
-                className="px-3 py-1 rounded-lg border border-border text-xs font-medium text-muted hover:text-danger hover:border-danger transition-colors"
-              >
-                Disconnect
-              </button>
-            )}
-          </div>
-
-          {token ? (
-            <p className="font-mono text-xs text-muted">{maskToken(token)}</p>
-          ) : (
-            <>
-              <input
-                type="password"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && draft && handleSaveAndClose(draft)}
-                placeholder="Paste your bearer token…"
-                className="w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <button
-                onClick={() => handleSaveAndClose(draft)}
-                disabled={!draft}
-                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
-              >
-                Connect
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted pl-4">Period</p>
-        <Select value={period} onValueChange={(v) => setPeriod(v as "3m" | "6m" | "1y" | "all")}>
-          <SelectTrigger className="w-full rounded-xl bg-card border-0 px-4 py-3 h-auto text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="3m">3 Months</SelectItem>
-            <SelectItem value="6m">6 Months</SelectItem>
-            <SelectItem value="1y">1 Year</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted pl-4">Theme</p>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            { id: "system", label: "System" },
-            { id: "light", label: "Light" },
-            { id: "dark", label: "Dark" },
-          ] as const).map((t) => {
-            const selected = theme === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTheme(t.id)}
-                className="flex flex-col items-center gap-1.5"
-              >
-                <div
-                  className={`relative w-full aspect-video rounded-xl overflow-hidden border-2 transition-colors ${
-                    selected ? "border-primary" : "border-border"
-                  }`}
-                >
-                  {t.id === "system" ? (
-                    <div className="absolute inset-0 flex">
-                      <div className="flex-1 flex items-center justify-center" style={{ background: "#0a0a0a" }}>
-                        <span className="px-2 py-0.5 rounded-full border border-white/30 text-white text-[9px] font-semibold">Aa</span>
-                      </div>
-                      <div className="flex-1 flex items-center justify-center" style={{ background: "#e8e8e8" }}>
-                        <span className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-semibold shadow-sm">Aa</span>
-                      </div>
-                    </div>
-                  ) : t.id === "light" ? (
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: "#e8e8e8" }}>
-                      <span className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-semibold shadow-sm">Aa</span>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: "#0a0a0a" }}>
-                      <span className="px-2 py-0.5 rounded-full border border-white/30 text-white text-[9px] font-semibold">Aa</span>
-                    </div>
-                  )}
-                  {selected && (
-                    <div className="absolute bottom-1 right-1 size-4 rounded-full bg-primary flex items-center justify-center">
-                      <HugeiconsIcon icon={Tick02Icon} className="size-2.5 text-primary-foreground" />
-                    </div>
-                  )}
-                </div>
-                <span className={`text-xs ${selected ? "text-foreground font-medium" : "text-muted"}`}>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {stats && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted pl-4">API Usage Stats</p>
-          <div className="rounded-xl overflow-hidden bg-card">
-            <div className="px-4 py-3 space-y-1.5">
-              <div className="flex justify-between text-xs text-muted">
-                <span>Rate limit</span>
-                <span className="font-mono text-foreground">{used} / {stats.rateLimit} req/hr</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-default overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${pct! > 80 ? "bg-danger" : "bg-success"}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
-              <span className="text-muted">Last change</span>
-              <span className="text-foreground font-medium">
-                {stats.lastDataChangeAt ? fmtRelative(stats.lastDataChangeAt) : "—"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
-              <span className="text-muted">Revision</span>
-              <span className="text-foreground font-medium font-mono">{stats.lastDataChangeRev ?? "—"}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 text-sm border-t border-separator">
-              <span className="text-muted">Sync status</span>
-              <span className="flex items-center gap-1.5">
-                <span className={`size-2 rounded-full ${stats.syncInProgress ? "bg-warning animate-pulse" : "bg-success"}`} />
-                <span className="text-foreground font-medium">{stats.syncInProgress ? "Syncing…" : "Up to date"}</span>
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-    </ModalTemplate>
-  );
-}
+/** Shorter queries match too much to be useful and would cost a request per keystroke pause. */
+const MIN_SEARCH_LENGTH = 2;
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-export const ICON_BG_COLORS = [
-  "bg-pink-500/20 text-pink-400",
-  "bg-violet-500/20 text-violet-400",
-  "bg-emerald-500/20 text-emerald-400",
-  "bg-sky-500/20 text-sky-400",
-  "bg-amber-500/20 text-amber-400",
-  "bg-rose-500/20 text-rose-400",
-  "bg-teal-500/20 text-teal-400",
-  "bg-indigo-500/20 text-indigo-400",
-];
-
-export function hashStr(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function groupByDate(records: WalletRecord[]) {
-  const map = new Map<string, WalletRecord[]>();
-  for (const r of records) {
-    const key = r.recordDate.slice(0, 10);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(r);
-  }
-  return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
-}
-
 type RecordsPage = { records: WalletRecord[]; nextOffset: number | null };
 
-/** Applies `patch` to a record wherever it's cached: account lists, the all-records list and search results. */
-function updateCachedRecord(queryClient: ReturnType<typeof useQueryClient>, token: string, id: string, patch: Partial<WalletRecord>) {
+/** Applies `patch` to a record wherever it's cached: account lists and search results. */
+function updateCachedRecord(queryClient: ReturnType<typeof useQueryClient>, session: string, id: string, patch: Partial<WalletRecord>) {
   const update = (r: WalletRecord) => (r.id === id ? { ...r, ...patch } : r);
-  queryClient.setQueriesData<InfiniteData<RecordsPage>>({ queryKey: ["records", token] }, (data) =>
+  queryClient.setQueriesData<InfiniteData<RecordsPage>>({ queryKey: ["records", session] }, (data) =>
     data && { ...data, pages: data.pages.map((p) => ({ ...p, records: p.records.map(update) })) }
   );
-  for (const key of ["allRecords", "search"]) {
-    queryClient.setQueriesData<WalletRecord[]>({ queryKey: [key, token] }, (data) => data?.map(update));
-  }
+  queryClient.setQueriesData<WalletRecord[]>({ queryKey: ["search", session] }, (data) => data?.map(update));
 }
 
 // The badge on a record's icon doubles as a quick status picker.
 function StatusBadge({ record }: { record: WalletRecord }) {
-  const { token, invalidateRecords } = useDashboard();
+  const { session, invalidateRecords } = useDashboard();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { mutate: setState, isPending, error } = useMutation({
     mutationFn: async (state: (typeof RECORD_STATES)[number]["id"]) =>
-      unwrap(await patchRecords(token, [{ id: record.id, recordState: state }])),
+      unwrap(await patchRecords([{ id: record.id, recordState: state }])),
     // Show the new status straight away; the refetch afterwards corrects it if the patch failed.
-    onMutate: (state) => updateCachedRecord(queryClient, token, record.id, { recordState: state }),
+    onMutate: (state) => updateCachedRecord(queryClient, session, record.id, { recordState: state }),
     onSuccess: () => setOpen(false),
     onSettled: invalidateRecords,
   });
@@ -375,103 +134,200 @@ function StatusBadge({ record }: { record: WalletRecord }) {
   );
 }
 
-// Memoized: the records view re-renders on every search keystroke, and re-rendering hundreds of rows each time is what makes typing lag.
-const RecordsTable = memo(function RecordsTable({ records, accounts, highlightedId, onEdit, selectedIds, onToggleSelect }: {
+// The table is one flat list of day headers and record rows, so it can be virtualized.
+type ListItem =
+  | { kind: "day"; date: string; total: number; currency: string | undefined; firstDay: boolean }
+  | { kind: "record"; record: WalletRecord; isFirst: boolean; isLast: boolean; striped: boolean };
+
+function toListItems(records: WalletRecord[]): ListItem[] {
+  const days = new Map<string, WalletRecord[]>();
+  for (const r of records) {
+    const key = r.recordDate.slice(0, 10);
+    const day = days.get(key);
+    if (day) day.push(r);
+    else days.set(key, [r]);
+  }
+  const items: ListItem[] = [];
+  let rowIndex = 0;
+  for (const [date, dayRecords] of days) {
+    items.push({
+      kind: "day",
+      date,
+      total: dayRecords.reduce((sum, r) => sum + r.amount.value, 0),
+      currency: dayRecords[0]?.amount.currencyCode,
+      firstDay: items.length === 0,
+    });
+    dayRecords.forEach((record, i) => {
+      items.push({ kind: "record", record, isFirst: i === 0, isLast: i === dayRecords.length - 1, striped: rowIndex++ % 2 === 1 });
+    });
+  }
+  return items;
+}
+
+/** The nearest ancestor that scrolls: the resizable panel the view sits in (see DashboardShell). */
+function findScrollParent(el: HTMLElement | null) {
+  for (let node = el?.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
+}
+
+/** Where `list` starts inside `scrollEl`'s content, tracked as the content above it resizes. */
+function useOffsetInScrollParent(list: HTMLElement | null, scrollEl: HTMLElement | null) {
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    if (!list || !scrollEl) return;
+    const measure = () =>
+      setOffset(list.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop);
+    // Fires once on observe, then whenever the content (search summary, header wrap) changes height.
+    const observer = new ResizeObserver(measure);
+    for (const child of scrollEl.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [list, scrollEl]);
+  return offset;
+}
+
+const RecordRow = memo(function RecordRow({ item, account, selecting, isSelected, onEdit, onToggleSelect }: {
+  item: Extract<ListItem, { kind: "record" }>;
+  account: Account | undefined;
+  selecting: boolean;
+  isSelected: boolean;
+  onEdit?: (r: WalletRecord) => void;
+  onToggleSelect?: (r: WalletRecord) => void;
+}) {
+  const { record: r, isFirst, isLast, striped } = item;
+  const { value, currencyCode } = r.amount;
+  const positive = value > 0;
+  const categoryIcon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
+  const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
+  const accountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
+  const accountColor = account?.color ?? "var(--muted-foreground)";
+
+  return (
+    <div
+      data-record-id={r.id}
+      onClick={() => (selecting ? onToggleSelect?.(r) : onEdit?.(r))}
+      className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${isSelected ? "bg-accent/10" : striped ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""}`}
+    >
+      {selecting && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect?.(r)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select record"
+          className="size-4 shrink-0 accent-primary"
+        />
+      )}
+      <div className="relative shrink-0">
+        <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
+          <HugeiconsIcon icon={categoryIcon} className="size-4" />
+        </div>
+        {!selecting && <StatusBadge record={r} />}
+      </div>
+
+      <div className="min-w-0 flex-1 sm:w-40 sm:flex-none">
+        <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
+        <p className="text-xs text-muted truncate sm:hidden">
+          {r.accountName}{r.counterParty ? ` · ${r.counterParty}` : ""}
+        </p>
+        {r.counterParty && <p className="hidden sm:block text-xs text-muted truncate">{r.counterParty}</p>}
+      </div>
+
+      <div className="hidden sm:flex items-center gap-1.5 min-w-0 w-36 shrink-0">
+        <HugeiconsIcon icon={accountIcon} className="size-3.5 shrink-0" style={{ color: accountColor }} />
+        <span className="text-sm text-muted truncate">{r.accountName}</span>
+      </div>
+
+      <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
+        <span className="text-sm text-muted truncate">{r.note ?? ""}</span>
+        {r.labels.slice(0, 2).map((l) => <LabelChip key={l.id} label={l} />)}
+        {r.labels.length > 2 && <span className="text-xs text-muted shrink-0">+{r.labels.length - 2}</span>}
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className={`text-sm font-semibold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
+          {positive ? "+" : ""}{formatMoney(value, currencyCode)}
+        </p>
+        <p className="text-xs text-muted">{timeFormat.format(new Date(r.recordDate))}</p>
+      </div>
+    </div>
+  );
+});
+
+function DayHeader({ item }: { item: Extract<ListItem, { kind: "day" }> }) {
+  return (
+    // The top padding stands in for the gap between days.
+    <div className={item.firstDay ? "" : "pt-3"}>
+      <div className="flex items-center justify-between px-4 py-2 bg-background">
+        <span className="text-xs font-semibold text-muted">{longDateFormat.format(new Date(item.date + "T00:00:00"))}</span>
+        <span className="text-xs font-mono font-semibold text-muted">
+          {item.total >= 0 ? "+" : ""}{formatMoney(item.total, item.currency)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Memoized: the records view re-renders on every search keystroke. Only the
+// rows in (and just beyond) the viewport are rendered, so long periods and
+// "Load more" don't grow the DOM without bound.
+const RecordsTable = memo(function RecordsTable({ records, accounts, onEdit, selectedIds, onToggleSelect }: {
   records: WalletRecord[];
   accounts: Account[];
-  highlightedId?: string;
   onEdit?: (r: WalletRecord) => void;
   /** Set while selecting records for a bulk action; rows then toggle selection instead of opening. */
   selectedIds?: Set<string>;
   onToggleSelect?: (r: WalletRecord) => void;
 }) {
-  const selecting = !!selectedIds;
+  const [list, setList] = useState<HTMLDivElement | null>(null);
+  const scrollEl = useMemo(() => findScrollParent(list), [list]);
+  const scrollMargin = useOffsetInScrollParent(list, scrollEl);
+  const items = useMemo(() => toListItems(records), [records]);
+  const accountsById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: (i) => (items[i].kind === "day" ? (i === 0 ? 32 : 44) : 64),
+    getItemKey: (i) => {
+      const item = items[i];
+      return item.kind === "day" ? `day-${item.date}` : item.record.id;
+    },
+    overscan: 8,
+    scrollMargin,
+  });
+
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
 
-  const groups = groupByDate(records);
-  let rowIndex = -1;
-
+  const selecting = !!selectedIds;
   return (
-    <div className="space-y-3">
-      {groups.map(({ date, records: dayRecords }) => {
-        const currency = dayRecords[0]?.amount.currencyCode;
-        const dayTotal = dayRecords.reduce((sum, r) => sum + r.amount.value, 0);
+    <div ref={setList} className="relative" style={{ height: virtualizer.getTotalSize() }}>
+      {virtualizer.getVirtualItems().map((v) => {
+        const item = items[v.index];
         return (
-          <div key={date}>
-            <div className="flex items-center justify-between px-4 py-2 bg-background">
-              <span className="text-xs font-semibold text-muted">{fmtDateLong(date + "T00:00:00")}</span>
-              <span className="text-xs font-mono font-semibold text-muted">
-                {dayTotal >= 0 ? "+" : ""}{fmt(dayTotal, currency)}
-              </span>
-            </div>
-            {dayRecords.map((r, i) => {
-              rowIndex++;
-              const isFirst = i === 0;
-              const isLast = i === dayRecords.length - 1;
-              const { value, currencyCode } = r.amount;
-              const positive = value > 0;
-              const highlighted = r.id === highlightedId;
-              const categoryIcon = getCategoryIcon(r.category?.name ?? "", r.category?.group?.name);
-              const iconColor = ICON_BG_COLORS[hashStr(r.category?.name ?? r.accountName) % ICON_BG_COLORS.length];
-              const account = accounts.find((a) => a.id === r.accountId);
-              const accountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
-              const accountColor = account?.color ?? "var(--muted-foreground)";
-              const isSelected = selectedIds?.has(r.id) ?? false;
-
-              return (
-                <div
-                  key={r.id}
-                  data-record-id={r.id}
-                  onClick={() => (selecting ? onToggleSelect?.(r) : onEdit?.(r))}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${isSelected ? "bg-accent/10" : rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
-                >
-                  {selecting && (
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleSelect?.(r)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label="Select record"
-                      className="size-4 shrink-0 accent-primary"
-                    />
-                  )}
-                  <div className="relative shrink-0">
-                    <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
-                      <HugeiconsIcon icon={categoryIcon} className="size-4" />
-                    </div>
-                    {!selecting && <StatusBadge record={r} />}
-                  </div>
-
-                  <div className="min-w-0 flex-1 sm:w-40 sm:flex-none">
-                    <p className="text-sm font-medium text-foreground truncate">{r.category?.name ?? "—"}</p>
-                    <p className="text-xs text-muted truncate sm:hidden">
-                      {r.accountName}{r.counterParty ? ` · ${r.counterParty}` : ""}
-                    </p>
-                    {r.counterParty && <p className="hidden sm:block text-xs text-muted truncate">{r.counterParty}</p>}
-                  </div>
-
-                  <div className="hidden sm:flex items-center gap-1.5 min-w-0 w-36 shrink-0">
-                    <HugeiconsIcon icon={accountIcon} className="size-3.5 shrink-0" style={{ color: accountColor }} />
-                    <span className="text-sm text-muted truncate">{r.accountName}</span>
-                  </div>
-
-                  <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
-                    <span className="text-sm text-muted truncate">{r.note ?? ""}</span>
-                    {r.labels.slice(0, 2).map((l) => <LabelChip key={l.id} label={l} />)}
-                    {r.labels.length > 2 && <span className="text-xs text-muted shrink-0">+{r.labels.length - 2}</span>}
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <p className={`text-sm font-semibold tabular-nums ${positive ? "text-success" : "text-danger"}`}>
-                      {positive ? "+" : ""}{fmt(value, currencyCode)}
-                    </p>
-                    <p className="text-xs text-muted">{fmtTime(r.recordDate)}</p>
-                  </div>
-                </div>
-              );
-            })}
+          <div
+            key={v.key}
+            data-index={v.index}
+            ref={virtualizer.measureElement}
+            className="absolute top-0 left-0 w-full"
+            style={{ transform: `translateY(${v.start - scrollMargin}px)` }}
+          >
+            {item.kind === "day" ? (
+              <DayHeader item={item} />
+            ) : (
+              <RecordRow
+                item={item}
+                account={accountsById.get(item.record.accountId)}
+                selecting={selecting}
+                isSelected={selectedIds?.has(item.record.id) ?? false}
+                onEdit={onEdit}
+                onToggleSelect={onToggleSelect}
+              />
+            )}
           </div>
         );
       })}
@@ -527,17 +383,27 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
 const NO_ACCOUNTS: Account[] = [];
 const NO_RECORDS: WalletRecord[] = [];
 
+/** Newest first. Each date is parsed once rather than on every comparison. */
+function sortByDateDesc(records: WalletRecord[]) {
+  return records
+    .map((r) => ({ r, t: Date.parse(r.recordDate) }))
+    .sort((a, b) => b.t - a.t)
+    .map(({ r }) => r);
+}
+
 export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const router = useRouter();
-  const { token, tokenReady, period, handleSave, invalidateRecords } = useDashboard();
+  const { session, tokenReady, period, handleSave, invalidateRecords } = useDashboard();
   const { searchInput, setSearchInput, debouncedSearch } = useDashboardSearch();
-  const [highlightedId, setHighlightedId] = useState<string | undefined>();
   // `viewingRecord` drives the read-only detail modal; `editingRecord` the edit form opened from it.
   const [viewingRecord, setViewingRecord] = useState<WalletRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
+  const [adding, setAdding] = useState(false);
   const [editingAccount, setEditingAccount] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
+
+  useIdlePreload(preloadRecordModals);
 
   const toggleSelected = useCallback((r: WalletRecord) => {
     setSelectedIds((prev) => {
@@ -547,16 +413,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     });
   }, []);
 
-  const { data: accounts = NO_ACCOUNTS, isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(token));
-
-  const { data: allRecords = [] } = useQuery({
-    queryKey: ["allRecords", token],
-    queryFn: async () => {
-      const { records } = await fetchRecords(token, { limit: 200 });
-      return records;
-    },
-    enabled: !!token,
-  });
+  const { data: accounts = NO_ACCOUNTS, isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(session));
 
   const {
     data: recordsData,
@@ -565,16 +422,18 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useInfiniteQuery(recordsQuery(token, accountId, period));
+  } = useInfiniteQuery(recordsQuery(session, accountId, period));
 
-  const isSearching = debouncedSearch.trim().length > 0;
+  const searchQuery = debouncedSearch.trim();
+  const isSearching = searchQuery.length >= MIN_SEARCH_LENGTH;
 
   const { data: searchResults = NO_RECORDS, isLoading: searchInitialLoading, isFetching: searchFetching } = useQuery({
-    queryKey: ["search", token, debouncedSearch],
+    queryKey: queryKeys.search(session, searchQuery),
     queryFn: async () => {
+      // The API filters one field at a time, so notes and payees are searched separately and merged.
       const [noteRes, cpRes] = await Promise.all([
-        fetchRecords(token, { from: "2000-01-01", limit: 200, note: debouncedSearch }),
-        fetchRecords(token, { from: "2000-01-01", limit: 200, counterParty: debouncedSearch }),
+        fetchRecords({ from: "2000-01-01", limit: 200, note: searchQuery }),
+        fetchRecords({ from: "2000-01-01", limit: 200, counterParty: searchQuery }),
       ]);
       const seen = new Set<string>();
       const merged: WalletRecord[] = [];
@@ -583,37 +442,20 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       }
       return merged;
     },
-    enabled: !!token && isSearching,
+    enabled: !!session && isSearching,
     staleTime: 30_000,
     // Keep the previous query's results on screen while the next one loads.
     placeholderData: keepPreviousData,
   });
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
-
-  function handleGoToRecord(id: string) {
-    const rec = allRecords.find((r) => r.id === id);
-    if (rec && rec.accountId !== accountId) {
-      router.push(`/account/${rec.accountId}`);
-    }
-    setHighlightedId(id);
-    setTimeout(() => {
-      document.querySelector(`[data-record-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 100);
-    setTimeout(() => setHighlightedId(undefined), 2500);
-  }
-
   // ── Derived state ────────────────────────────────────────────────────────────
 
   const records = useMemo(() => recordsData?.pages.flatMap((p) => p.records) ?? NO_RECORDS, [recordsData]);
   const displayedRecords = useMemo(
-    () =>
-      [...(isSearching ? searchResults : records)].sort(
-        (a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime()
-      ),
+    () => sortByDateDesc(isSearching ? searchResults : records),
     [isSearching, searchResults, records]
   );
-  const activeAccounts = accounts.filter((a) => !a.archived);
+  const activeAccounts = useMemo(() => accounts.filter((a) => !a.archived), [accounts]);
   const currentAccount = accountId === undefined ? undefined : accounts.find((a) => a.id === accountId);
   const selectedAccountName =
     accountId === undefined
@@ -621,12 +463,12 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       : currentAccount?.name ?? "Records";
   const selectedRecords = selectedIds ? displayedRecords.filter((r) => selectedIds.has(r.id)) : [];
 
-  const initialLoading = !tokenReady || (!!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0);
+  const initialLoading = !tokenReady || (!!session && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0);
   // Only while there's nothing to show for the current account or query —
   // background refetches (after an edit, on window focus) keep the list up.
   const showRecordsSkeleton = isSearching ? searchInitialLoading : recordsInitialLoading;
 
-  if (tokenReady && !token) {
+  if (tokenReady && !session) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 
@@ -684,7 +526,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           </h2>
           {isSearching && (
             <p className="text-xs text-muted mt-0.5">
-              {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${debouncedSearch}"`}
+              {searchFetching ? "Searching…" : `${displayedRecords.length} result${displayedRecords.length !== 1 ? "s" : ""} for "${searchQuery}"`}
             </p>
           )}
         </div>
@@ -697,17 +539,9 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
             <HugeiconsIcon icon={CheckListIcon} className="size-4" />
             Select
           </Button>
-          {token && (
-            <AddRecordButton
-              token={token}
-              accounts={activeAccounts}
-              records={allRecords}
-              defaultAccountId={accountId}
-              onSuccess={invalidateRecords}
-              onGoToRecord={handleGoToRecord}
-              onOpenRecord={setViewingRecord}
-            />
-          )}
+          <Button onClick={() => setAdding(true)} disabled={!session}>
+            + Add Record
+          </Button>
         </div>
       </div>
 
@@ -734,7 +568,6 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         <RecordsTable
           records={displayedRecords}
           accounts={accounts}
-          highlightedId={highlightedId}
           onEdit={setViewingRecord}
           selectedIds={selectedIds ?? undefined}
           onToggleSelect={toggleSelected}
@@ -743,7 +576,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
 
       {selectedIds && (
         <BulkActionBar
-          token={token}
+          session={session}
           selected={selectedRecords}
           accounts={accounts}
           onSelectAll={() => setSelectedIds(new Set(displayedRecords.map((r) => r.id)))}
@@ -770,10 +603,20 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         </p>
       )}
 
+      {adding && (
+        <AddRecordModal
+          session={session}
+          accounts={activeAccounts}
+          defaultAccountId={accountId}
+          isOpen={adding}
+          onClose={() => setAdding(false)}
+          onSuccess={invalidateRecords}
+          onOpenRecord={(rec) => { setAdding(false); setViewingRecord(rec); }}
+        />
+      )}
       {viewingRecord && (
         <RecordDetailModal
           record={viewingRecord}
-          token={token}
           accounts={activeAccounts}
           isOpen={!!viewingRecord}
           onClose={() => setViewingRecord(null)}
@@ -785,9 +628,8 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       {editingRecord && (
         <EditRecordModal
           record={editingRecord}
-          token={token}
+          session={session}
           accounts={accounts.filter((a) => !a.archived || a.id === editingRecord.accountId)}
-          records={allRecords}
           isOpen={!!editingRecord}
           onClose={() => setEditingRecord(null)}
           onSuccess={invalidateRecords}
@@ -804,13 +646,11 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       {duplicatingRecord && (
         <DuplicateRecordModal
           record={duplicatingRecord}
-          token={token}
+          session={session}
           accounts={activeAccounts}
-          records={allRecords}
           isOpen={!!duplicatingRecord}
           onClose={() => setDuplicatingRecord(null)}
           onSuccess={() => { setDuplicatingRecord(null); invalidateRecords(); }}
-          onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
           onOpenRecord={(rec) => { setDuplicatingRecord(null); setViewingRecord(rec); }}
         />
       )}

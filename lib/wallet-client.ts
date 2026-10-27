@@ -282,6 +282,18 @@ function mapStandingOrderItem(i: RawStandingOrderItem): StandingOrderItem {
   };
 }
 
+// Every data endpoint reports rate limit and change tracking in its response headers.
+function statsFromHeaders(headers: Record<string, unknown>): ApiStats {
+  const header = (name: string) => (typeof headers[name] === "string" ? (headers[name] as string) : null);
+  return {
+    rateLimit: Number(header("x-ratelimit-limit") ?? 300),
+    rateLimitRemaining: Number(header("x-ratelimit-remaining") ?? 0),
+    lastDataChangeAt: header("x-last-data-change-at"),
+    lastDataChangeRev: header("x-last-data-change-rev"),
+    syncInProgress: header("x-sync-in-progress") === "true",
+  };
+}
+
 // ── Batch write results ───────────────────────────────────────────────────────
 // Every write endpoint answers with per-item results; a 400 means all items
 // failed but still carries the same body, so it is read rather than thrown.
@@ -326,11 +338,12 @@ export function createWalletClient(token: string) {
   }
 
   return {
-    async getAccounts(params?: GetAccountsParams): Promise<{ accounts: Account[]; nextOffset?: number }> {
-      const { data } = await http.get<{ accounts?: RawAccount[]; nextOffset?: number }>("/accounts", { params });
+    async getAccounts(params?: GetAccountsParams): Promise<{ accounts: Account[]; nextOffset?: number; stats: ApiStats }> {
+      const { data, headers } = await http.get<{ accounts?: RawAccount[]; nextOffset?: number }>("/accounts", { params });
       return {
         accounts: (data.accounts ?? []).map(mapAccount),
         nextOffset: data.nextOffset,
+        stats: statsFromHeaders(headers),
       };
     },
 
@@ -411,15 +424,10 @@ export function createWalletClient(token: string) {
       return write("delete", `/${type}`, { ids });
     },
 
+    /** The cheapest request that carries the stats headers. */
     async getStats(): Promise<ApiStats> {
-      const res = await http.get("/accounts", { params: { limit: 1 } });
-      return {
-        rateLimit: Number(res.headers["x-ratelimit-limit"] ?? 300),
-        rateLimitRemaining: Number(res.headers["x-ratelimit-remaining"] ?? 0),
-        lastDataChangeAt: res.headers["x-last-data-change-at"] ?? null,
-        lastDataChangeRev: res.headers["x-last-data-change-rev"] ?? null,
-        syncInProgress: res.headers["x-sync-in-progress"] === "true",
-      };
+      const { headers } = await http.get("/accounts", { params: { limit: 1 } });
+      return statsFromHeaders(headers);
     },
   };
 }

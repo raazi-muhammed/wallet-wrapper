@@ -1,20 +1,23 @@
-import { createWalletClient } from "@/lib/wallet-client";
+import { createWalletClient, type ApiStats } from "@/lib/wallet-client";
 
 // Server-side read helpers, served to the client through app/api/wallet/[resource]/route.ts.
 // Reads deliberately aren't Server Actions: Next dispatches those one at a time,
 // which would serialize every query on a page.
 
+/** Every account, plus the API stats read off the first page's headers (saves a separate stats request). */
 export async function fetchAccounts(token: string) {
   const client = createWalletClient(token);
   const all: Awaited<ReturnType<typeof client.getAccounts>>["accounts"] = [];
+  let stats: ApiStats | undefined;
   let offset = 0;
   while (true) {
-    const { accounts, nextOffset } = await client.getAccounts({ limit: 200, offset });
-    all.push(...accounts);
-    if (!nextOffset || accounts.length === 0) break;
-    offset = nextOffset;
+    const page = await client.getAccounts({ limit: 200, offset });
+    stats ??= page.stats;
+    all.push(...page.accounts);
+    if (!page.nextOffset || page.accounts.length === 0) break;
+    offset = page.nextOffset;
   }
-  return all;
+  return { accounts: all, stats: stats! };
 }
 
 export async function fetchRecords(

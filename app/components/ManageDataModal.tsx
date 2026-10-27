@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, ArrowLeft01Icon, ChevronRightIcon, Database01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowLeft01Icon, ChevronRightIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModalTemplate } from "@/templates/modal-template";
-import { fetchAccounts, fetchBudgets } from "@/lib/wallet-fetch";
 import {
   patchBudgets,
   patchCategories,
@@ -21,10 +20,11 @@ import {
 import type { Account, Budget, Category, Label, WalletColor } from "../actions";
 import type { PatchBudgetItem, PatchCategoryItem } from "@/lib/wallet-client";
 import { getAccountIcon } from "@/lib/utils";
-import { useCategories, useLabels } from "@/hooks/use-wallet-data";
+import { accountsQuery, budgetsQuery, useCategories, useLabels } from "@/hooks/use-wallet-data";
 import { AccountForm } from "./AccountEditModal";
 import { ColorPicker, ErrorBox, FieldLabel, LabelChip, MultiSelect, ToggleRow, unwrap } from "./EditControls";
 import { useDashboard } from "./DashboardProvider";
+import { formatMoneyWhole } from "@/lib/format";
 
 type Tab = "accounts" | "categories" | "labels" | "budgets";
 type Cardinality = NonNullable<Category["cardinality"]>;
@@ -97,12 +97,8 @@ function SaveRow({ onCancel, onSave, pending, disabled, label = "Save changes" }
 // ── Accounts ──────────────────────────────────────────────────────────────────
 
 function AccountsTab({ onOpen }: { onOpen: (a: Account) => void }) {
-  const { token } = useDashboard();
-  const { data: accounts, isLoading } = useQuery({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
-  });
+  const { session } = useDashboard();
+  const { data: accounts, isLoading } = useQuery(accountsQuery(session));
   if (isLoading || !accounts) return <ListSkeleton />;
 
   const sorted = [...accounts].sort((a, b) => Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name));
@@ -123,8 +119,8 @@ function AccountsTab({ onOpen }: { onOpen: (a: Account) => void }) {
 // ── Categories ────────────────────────────────────────────────────────────────
 
 function CategoriesTab({ onOpen }: { onOpen: (c: Category) => void }) {
-  const { token } = useDashboard();
-  const { data: categories, isLoading } = useCategories(token);
+  const { session } = useDashboard();
+  const { data: categories, isLoading } = useCategories(session);
   const [search, setSearch] = useState("");
   if (isLoading || !categories) return <ListSkeleton />;
 
@@ -160,7 +156,7 @@ function CategoriesTab({ onOpen }: { onOpen: (c: Category) => void }) {
 }
 
 function CategoryForm({ category, onDone }: { category: Category; onDone: () => void }) {
-  const { token, invalidateAll } = useDashboard();
+  const { invalidateAll } = useDashboard();
   const isBase = !category.customCategory;
   const [name, setName] = useState(category.name);
   const [color, setColor] = useState<WalletColor | undefined>();
@@ -183,7 +179,7 @@ function CategoryForm({ category, onDone }: { category: Category; onDone: () => 
       if (!reset.has("color") && color) patch.color = color;
       if (!reset.has("cardinality") && cardinality !== (category.cardinality ?? "none")) patch.cardinality = cardinality;
       if (reset.size > 0) patch.reset = [...reset];
-      if (Object.keys(patch).length > 1) unwrap(await patchCategories(token, [patch]));
+      if (Object.keys(patch).length > 1) unwrap(await patchCategories([patch]));
     },
     onSuccess: () => { invalidateAll(); onDone(); },
   });
@@ -223,13 +219,13 @@ function CategoryForm({ category, onDone }: { category: Category; onDone: () => 
 }
 
 function SubcategoryForm({ parent, onDone }: { parent: Category; onDone: () => void }) {
-  const { token, invalidateAll } = useDashboard();
+  const { invalidateAll } = useDashboard();
   const [name, setName] = useState("");
   const [color, setColor] = useState<WalletColor | undefined>();
   const [cardinality, setCardinality] = useState<Cardinality | "inherit">("inherit");
 
   const { mutate: save, isPending, error } = useMutation({
-    mutationFn: async () => unwrap(await createSubcategory(token, {
+    mutationFn: async () => unwrap(await createSubcategory({
       parentId: parent.id,
       name: name.trim(),
       ...(color ? { color } : {}),
@@ -267,8 +263,8 @@ function SubcategoryForm({ parent, onDone }: { parent: Category; onDone: () => v
 // ── Labels ────────────────────────────────────────────────────────────────────
 
 function LabelsTab({ onOpen }: { onOpen: (l: Label) => void }) {
-  const { token } = useDashboard();
-  const { data: labels, isLoading } = useLabels(token);
+  const { session } = useDashboard();
+  const { data: labels, isLoading } = useLabels(session);
   if (isLoading || !labels) return <ListSkeleton />;
   if (labels.length === 0) return <p className="text-center text-sm text-muted py-6">No labels yet</p>;
 
@@ -286,7 +282,7 @@ function LabelsTab({ onOpen }: { onOpen: (l: Label) => void }) {
 }
 
 function LabelForm({ label, onDone }: { label?: Label; onDone: () => void }) {
-  const { token, invalidateAll } = useDashboard();
+  const { invalidateAll } = useDashboard();
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState<WalletColor | undefined>();
   const [archived, setArchived] = useState(label?.archived ?? false);
@@ -294,7 +290,7 @@ function LabelForm({ label, onDone }: { label?: Label; onDone: () => void }) {
   const { mutate: save, isPending, error } = useMutation({
     mutationFn: async () => {
       if (!label) {
-        unwrap(await createLabel(token, { name: name.trim(), ...(color ? { color } : {}) }));
+        unwrap(await createLabel({ name: name.trim(), ...(color ? { color } : {}) }));
         return;
       }
       const patch = {
@@ -303,7 +299,7 @@ function LabelForm({ label, onDone }: { label?: Label; onDone: () => void }) {
         ...(color ? { color } : {}),
         ...(archived !== label.archived ? { archived } : {}),
       };
-      if (Object.keys(patch).length > 1) unwrap(await patchLabels(token, [patch]));
+      if (Object.keys(patch).length > 1) unwrap(await patchLabels([patch]));
     },
     onSuccess: () => { invalidateAll(); onDone(); },
   });
@@ -337,22 +333,9 @@ const BUDGET_TYPE_LABELS: Record<Budget["type"], string> = {
   BUDGET_ALL: "All time (legacy)",
 };
 
-function fmtMoney(value: number | null, currency: string) {
-  if (value == null) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
-  } catch {
-    return `${currency} ${value}`;
-  }
-}
-
 function BudgetsTab({ onOpen }: { onOpen: (b: Budget) => void }) {
-  const { token } = useDashboard();
-  const { data: budgets, isLoading } = useQuery({
-    queryKey: ["budgets", token],
-    queryFn: () => fetchBudgets(token),
-    enabled: !!token,
-  });
+  const { session } = useDashboard();
+  const { data: budgets, isLoading } = useQuery(budgetsQuery(session));
   if (isLoading || !budgets) return <ListSkeleton />;
   if (budgets.length === 0) return <p className="text-center text-sm text-muted py-6">No budgets yet</p>;
 
@@ -363,7 +346,7 @@ function BudgetsTab({ onOpen }: { onOpen: (b: Budget) => void }) {
         <ListRow key={b.id} onClick={() => onOpen(b)}>
           <span className="min-w-0">
             <span className={`block text-sm truncate ${b.closed ? "text-muted" : "text-foreground"}`}>{b.name}</span>
-            <span className="block text-xs text-muted">{BUDGET_TYPE_LABELS[b.type]} · {fmtMoney(b.limit, b.currencyCode)}</span>
+            <span className="block text-xs text-muted">{BUDGET_TYPE_LABELS[b.type]} · {formatMoneyWhole(b.limit, b.currencyCode)}</span>
           </span>
           {b.closed && <Muted>Closed</Muted>}
         </ListRow>
@@ -373,10 +356,10 @@ function BudgetsTab({ onOpen }: { onOpen: (b: Budget) => void }) {
 }
 
 function BudgetForm({ budget, onDone }: { budget: Budget; onDone: () => void }) {
-  const { token, invalidateBudgets } = useDashboard();
-  const { data: accounts = [] } = useQuery({ queryKey: ["accounts", token], queryFn: () => fetchAccounts(token), enabled: !!token });
-  const { data: categories = [] } = useCategories(token);
-  const { data: labels = [] } = useLabels(token);
+  const { session, invalidateBudgets } = useDashboard();
+  const { data: accounts = [] } = useQuery(accountsQuery(session));
+  const { data: categories = [] } = useCategories(session);
+  const { data: labels = [] } = useLabels(session);
 
   const isCustom = budget.type === "BUDGET_CUSTOM";
   const readOnly = budget.type === "BUDGET_ALL";
@@ -408,7 +391,7 @@ function BudgetForm({ budget, onDone }: { budget: Budget; onDone: () => void }) 
       if (accountDiff) patch.accountIds = accountDiff;
       if (categoryDiff) patch.categoryIds = categoryDiff;
       if (labelDiff) patch.labelIds = labelDiff;
-      if (Object.keys(patch).length > 1) unwrap(await patchBudgets(token, [patch]));
+      if (Object.keys(patch).length > 1) unwrap(await patchBudgets([patch]));
     },
     onSuccess: () => { invalidateBudgets(); onDone(); },
   });
@@ -498,8 +481,8 @@ function detailTitle(d: Detail) {
   }
 }
 
-export function ManageDataModal() {
-  const [open, setOpen] = useState(false);
+/** Opened from the sidebar's Manage data button (AccountSidebarList.tsx), which loads this module on demand. */
+export function ManageDataModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [tab, setTab] = useState<Tab>("accounts");
   const [detail, setDetail] = useState<Detail | null>(null);
   const back = () => setDetail(null);
@@ -507,21 +490,10 @@ export function ManageDataModal() {
   return (
     <ModalTemplate
       open={open}
-      onOpenChange={(o) => { setOpen(o); if (!o) setDetail(null); }}
+      onOpenChange={(o) => { onOpenChange(o); if (!o) setDetail(null); }}
       title="Manage data"
       className="max-w-lg max-h-[90vh] flex flex-col"
       bodyClassName="flex flex-col flex-1 min-h-0 space-y-3"
-      trigger={
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Manage accounts, categories, labels and budgets"
-          title="Manage data"
-          className="rounded-full text-muted hover:bg-secondary dark:hover:bg-secondary aria-expanded:bg-secondary focus-visible:border-transparent focus-visible:ring-0"
-        >
-          <HugeiconsIcon icon={Database01Icon} className="size-4" />
-        </Button>
-      }
     >
       {detail ? (
         <>

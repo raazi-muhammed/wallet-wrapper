@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // A barrel of thousands of icon modules; only load the ones imported.
+    optimizePackageImports: ["@hugeicons/core-free-icons"],
+  },
 };
 
 export default nextConfig;

@@ -1,9 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { prefetchDashboardData, type Period } from "@/hooks/use-wallet-data";
+import { connect, disconnect } from "@/app/actions";
+import type { Period } from "@/hooks/use-wallet-data";
+import { queryKeys, type QueryResource } from "@/lib/query-keys";
+import { fetchApiStats, type AccountsData } from "@/lib/wallet-fetch";
 
 // A pixel width has no relationship to how wide the viewport actually is —
 // persisted from a desktop session, it can exceed a phone's entire screen,
@@ -17,31 +20,24 @@ export const SIDEBAR_PERCENT_DEFAULT = 20;
 export const SIDEBAR_PERCENT_MIN = 15;
 export const SIDEBAR_PERCENT_MAX = 50;
 
-const TOKEN_STORAGE_KEY = "wallet_token";
-const TOKEN_CHANGE_EVENT = "wallet-token-change";
+// Where the token was kept before it moved to an httpOnly cookie. A token
+// found here is handed to the server once, then removed.
+const LEGACY_TOKEN_STORAGE_KEY = "wallet_token";
 
-function subscribeToToken(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(TOKEN_CHANGE_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(TOKEN_CHANGE_EVENT, onChange);
-  };
-}
-
-function writeToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  else localStorage.removeItem(TOKEN_STORAGE_KEY);
-  window.dispatchEvent(new Event(TOKEN_CHANGE_EVENT));
-}
+// Returning to the tab asks the API whether anything changed (one cheap request)
+// instead of refetching every query. Checks are spaced out to spare the rate limit.
+const REVISION_CHECK_INTERVAL = 60_000;
 
 type DashboardContextValue = {
-  token: string;
-  /** False until the stored token has been read (server render and hydration); views show a loading state, not the connect form, until then. */
+  /** A non-secret key for the connected token (empty when not connected). Query keys are scoped by it. */
+  session: string;
+  /** The connected token with its middle hidden, for display. */
+  maskedToken: string;
+  /** False until it's known whether a token is connected; views show a loading state, not the connect form, until then. */
   tokenReady: boolean;
   period: Period;
   setPeriod: (p: Period) => void;
-  handleSave: (t: string) => void;
+  handleSave: (t: string) => Promise<void>;
   handleDisconnect: () => void;
   invalidateAll: () => void;
   /** Refreshes what a record change can affect: record lists, search, balances and planned payment status. */
@@ -57,10 +53,14 @@ type DashboardSearchValue = {
   debouncedSearch: string;
 };
 
+const ALL_RESOURCES = Object.keys(queryKeys) as QueryResource[];
+
 function parseSidebarWidthPercent(stored: string | undefined) {
   const percent = Number(stored);
   return percent >= SIDEBAR_PERCENT_MIN && percent <= SIDEBAR_PERCENT_MAX ? percent : SIDEBAR_PERCENT_DEFAULT;
 }
+
+const noSubscription = () => () => {};
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 // Search lives in its own context: it changes on every keystroke, and only the
@@ -80,25 +80,28 @@ export function useDashboardSearch() {
 }
 
 export function DashboardProvider({
+  session,
+  maskedToken,
   storedSidebarWidth,
   children,
 }: {
+  /** From the token cookie, read by the (server) dashboard layout. */
+  session: string;
+  maskedToken: string;
   /** The raw sidebar width cookie, read by the (server) dashboard layout. */
   storedSidebarWidth?: string;
   children: React.ReactNode;
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  // The server has no localStorage, so its snapshot is null ("not read yet").
-  // React renders that during hydration — matching the server HTML — then
-  // re-renders straight away with the stored token.
-  const storedToken = useSyncExternalStore(
-    subscribeToToken,
-    () => localStorage.getItem(TOKEN_STORAGE_KEY) ?? "",
+  // The server has no localStorage, so its snapshot is null ("not read yet"),
+  // which keeps the hydration render identical to the server HTML.
+  const hasLegacyToken = useSyncExternalStore(
+    noSubscription,
+    () => !!localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY),
     () => null
   );
-  const token = storedToken ?? "";
-  const tokenReady = storedToken !== null;
+  const tokenReady = !!session || hasLegacyToken === false;
   const [period, setPeriod] = useState<Period>("3m");
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -107,13 +110,15 @@ export function DashboardProvider({
   // frame would make resizing janky.
   const [sidebarWidthPercent] = useState(() => parseSidebarWidthPercent(storedSidebarWidth));
 
-  // The fetches don't need to wait for the token to reach the views: kick
-  // them off while hydrating so the queries find them already in flight.
-  useState(() => {
-    if (typeof window === "undefined") return;
-    const t = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (t) prefetchDashboardData(queryClient, t);
-  });
+  useEffect(() => {
+    if (!hasLegacyToken) return;
+    if (session) {
+      localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+      return;
+    }
+    const legacy = localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY);
+    if (legacy) void connect(legacy);
+  }, [hasLegacyToken, session]);
 
   // Debounce search input
   useEffect(() => {
@@ -121,39 +126,71 @@ export function DashboardProvider({
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Memoized so consumers only re-render when the token or period changes.
-  const value = useMemo<DashboardContextValue>(() => {
-    const invalidate = (...keys: string[]) => {
-      for (const key of keys) queryClient.invalidateQueries({ queryKey: [key, token] });
+  const invalidate = useCallback(
+    (...resources: QueryResource[]) => {
+      for (const resource of resources) queryClient.invalidateQueries({ queryKey: [resource, session] });
+    },
+    [queryClient, session]
+  );
+
+  useEffect(() => {
+    if (!session) return;
+    const accountsKey = queryKeys.accounts(session);
+    let lastCheck = Date.now();
+    async function checkRevision() {
+      if (document.visibilityState !== "visible" || Date.now() - lastCheck < REVISION_CHECK_INTERVAL) return;
+      lastCheck = Date.now();
+      // Accounts fetched this recently already carry a current revision.
+      const updatedAt = queryClient.getQueryState(accountsKey)?.dataUpdatedAt ?? 0;
+      if (Date.now() - updatedAt < REVISION_CHECK_INTERVAL) return;
+      const stats = await fetchApiStats().catch(() => null);
+      if (!stats) return;
+      const known = queryClient.getQueryData<AccountsData>(accountsKey)?.stats?.lastDataChangeRev;
+      if (stats.lastDataChangeRev && stats.lastDataChangeRev === known) {
+        // Nothing changed: keep the cache, and show the fresh rate limit.
+        queryClient.setQueryData<AccountsData>(accountsKey, (data) => data && { ...data, stats });
+      } else {
+        invalidate(...ALL_RESOURCES);
+      }
+    }
+    window.addEventListener("focus", checkRevision);
+    document.addEventListener("visibilitychange", checkRevision);
+    return () => {
+      window.removeEventListener("focus", checkRevision);
+      document.removeEventListener("visibilitychange", checkRevision);
     };
-    return {
-      token,
+  }, [session, queryClient, invalidate]);
+
+  // Memoized so consumers only re-render when the session or period changes.
+  const value = useMemo<DashboardContextValue>(
+    () => ({
+      session,
+      maskedToken,
       tokenReady,
       period,
       setPeriod,
       handleSave(t: string) {
-        prefetchDashboardData(queryClient, t);
-        writeToken(t);
+        // The cookie is set and the layout re-rendered with the new account's data in one round trip.
+        queryClient.clear();
+        return connect(t);
       },
       handleDisconnect() {
-        writeToken(null);
-        queryClient.clear();
-        router.push("/");
+        void disconnect().then(() => {
+          queryClient.clear();
+          router.push("/");
+        });
       },
-      invalidateAll: () =>
-        invalidate(
-          "records", "allRecords", "accounts", "stats", "search",
-          "categories", "labels", "budgets", "standingOrders", "standingOrderItems",
-        ),
-      invalidateRecords: () => invalidate("records", "allRecords", "accounts", "stats", "search", "standingOrderItems"),
+      invalidateAll: () => invalidate(...ALL_RESOURCES),
+      invalidateRecords: () => invalidate("records", "accounts", "search", "standingOrderItems"),
       invalidateBudgets: () => invalidate("budgets"),
       sidebarWidthPercent,
       setSidebarWidthPercent(percent: number) {
         const clamped = Math.min(SIDEBAR_PERCENT_MAX, Math.max(SIDEBAR_PERCENT_MIN, percent));
         document.cookie = `${SIDEBAR_WIDTH_COOKIE}=${clamped}; path=/; max-age=31536000; samesite=lax`;
       },
-    };
-  }, [token, tokenReady, period, sidebarWidthPercent, queryClient, router]);
+    }),
+    [session, maskedToken, tokenReady, period, sidebarWidthPercent, queryClient, router, invalidate]
+  );
 
   const search = useMemo(() => ({ searchInput, setSearchInput, debouncedSearch }), [searchInput, debouncedSearch]);
 

@@ -17,7 +17,7 @@ export function AccountForm({ account, onDone, onCancel }: {
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const { token, invalidateAll } = useDashboard();
+  const { invalidateRecords } = useDashboard();
   const [name, setName] = useState(account.name);
   const [color, setColor] = useState<WalletColor | undefined>();
   const [archived, setArchived] = useState(account.archived);
@@ -39,9 +39,9 @@ export function AccountForm({ account, onDone, onCancel }: {
       else if (bankAccountNumber.trim()) patch.bankAccountNumber = bankAccountNumber.trim();
       const balance = Number(initialBalance);
       if (initialBalance.trim() !== "" && Number.isFinite(balance) && balance !== account.balance.initial) patch.initialBalance = balance;
-      if (Object.keys(patch).length > 1) unwrap(await patchAccounts(token, [patch]));
+      if (Object.keys(patch).length > 1) unwrap(await patchAccounts([patch]));
     },
-    onSuccess: () => { invalidateAll(); onDone(); },
+    onSuccess: () => { invalidateRecords(); onDone(); },
   });
 
   return (

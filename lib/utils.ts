@@ -83,3 +83,20 @@ export function getCategoryIcon(name: string, groupName?: string): IconSvgElemen
   }
   return Tag01Icon
 }
+
+export const ICON_BG_COLORS = [
+  "bg-pink-500/20 text-pink-400",
+  "bg-violet-500/20 text-violet-400",
+  "bg-emerald-500/20 text-emerald-400",
+  "bg-sky-500/20 text-sky-400",
+  "bg-amber-500/20 text-amber-400",
+  "bg-rose-500/20 text-rose-400",
+  "bg-teal-500/20 text-teal-400",
+  "bg-indigo-500/20 text-indigo-400",
+]
+
+export function hashStr(s: string) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}

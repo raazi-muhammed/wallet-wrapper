@@ -49,6 +49,12 @@ export function DashboardShell({
       <ResizablePanelGroup
         orientation="horizontal"
         style={{ height: "100dvh", overflow: "hidden" }}
+        // Without a default layout the server can't size the panels, so the
+        // HTML it sends doesn't match the client's first render.
+        defaultLayout={{
+          "sidebar-panel": initialSidebarWidthPercent,
+          "detail-panel": 100 - initialSidebarWidthPercent,
+        }}
       >
         <ResizablePanel
           id="sidebar-panel"

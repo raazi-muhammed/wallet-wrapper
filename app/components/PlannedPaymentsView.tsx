@@ -5,27 +5,17 @@ import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { differenceInCalendarDays, format, parseISO, startOfDay, subDays } from "date-fns";
-import { fetchAccounts, fetchStandingOrders, fetchStandingOrderItems } from "../actions";
 import type { Account, Category, StandingOrder, StandingOrderItem } from "../actions";
-import { getAccountIcon, getCategoryIcon } from "@/lib/utils";
-import { useCategories } from "@/hooks/use-wallet-data";
+import { ICON_BG_COLORS, hashStr, getAccountIcon, getCategoryIcon } from "@/lib/utils";
+import { accountsQuery, standingOrderItemsQuery, standingOrdersQuery, useCategories } from "@/hooks/use-wallet-data";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
-import { ICON_BG_COLORS, hashStr } from "./AccountRecordsView";
 import { LabelChip } from "./EditControls";
+import { formatMoney } from "@/lib/format";
 
 // Unpaid occurrences older than this are treated as stale rather than overdue.
 const OVERDUE_LOOKBACK_DAYS = 90;
-
-function fmt(amount: number | undefined, currency: string | undefined) {
-  if (amount == null || !currency) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
 
 // ── Recurrence (RRULE) helpers ────────────────────────────────────────────────
 
@@ -74,7 +64,7 @@ function fmtTotals(entries: { amount: number; currencyCode: string }[]) {
   const byCurrency = new Map<string, number>();
   for (const e of entries) byCurrency.set(e.currencyCode, (byCurrency.get(e.currencyCode) ?? 0) + e.amount);
   if (byCurrency.size === 0) return "—";
-  return [...byCurrency].map(([c, v]) => fmt(v, c)).join(" · ");
+  return [...byCurrency].map(([c, v]) => formatMoney(v, c)).join(" · ");
 }
 
 // ── Rows ──────────────────────────────────────────────────────────────────────
@@ -140,7 +130,7 @@ function PaymentRow({
 
       <div className="shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums ${income ? "text-success" : "text-danger"}`}>
-          {income ? "+" : "-"}{fmt(order.amount, order.currencyCode)}
+          {income ? "+" : "-"}{formatMoney(order.amount, order.currencyCode)}
         </p>
         <p className={`text-xs ${days != null && days < 0 ? "text-danger" : "text-muted"}`}>
           {date ? `${format(parseISO(date), "d MMM")} · ${dueLabel(days!)}` : "No upcoming date"}
@@ -277,34 +267,19 @@ function PlannedPayments({
 }
 
 export function PlannedPaymentsView() {
-  const { token, handleSave } = useDashboard();
+  const { session, tokenReady, handleSave } = useDashboard();
   const overdueFrom = format(subDays(new Date(), OVERDUE_LOOKBACK_DAYS), "yyyy-MM-dd");
 
-  const { data: orders = [], isLoading: ordersLoading } = useQuery({
-    queryKey: ["standingOrders", token],
-    queryFn: () => fetchStandingOrders(token),
-    enabled: !!token,
-  });
+  const { data: orders = [], isLoading: ordersLoading } = useQuery(standingOrdersQuery(session));
+  const { data: items = [], isLoading: itemsLoading } = useQuery(standingOrderItemsQuery(session, overdueFrom));
+  const { data: accounts = [] } = useQuery(accountsQuery(session));
+  const { data: categories = [] } = useCategories(session);
 
-  const { data: items = [], isLoading: itemsLoading } = useQuery({
-    queryKey: ["standingOrderItems", token, overdueFrom],
-    queryFn: () => fetchStandingOrderItems(token, `${overdueFrom}T00:00:00Z`),
-    enabled: !!token,
-  });
-
-  const { data: accounts = [] } = useQuery({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
-  });
-
-  const { data: categories = [] } = useCategories(token);
-
-  if (!token) {
+  if (tokenReady && !session) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 
-  if (ordersLoading || itemsLoading) {
+  if (!tokenReady || ordersLoading || itemsLoading) {
     return (
       <div className="px-6 py-6 space-y-4">
         <Skeleton className="h-5 w-40" />

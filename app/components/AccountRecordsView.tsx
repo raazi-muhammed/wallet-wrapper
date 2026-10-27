@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { memo, useCallback, useMemo, useState, useEffect } from "react";
+import { keepPreviousData, useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -14,13 +14,15 @@ import {
   PencilEdit02Icon,
   CheckListIcon,
 } from "@hugeicons/core-free-icons";
-import { fetchAccounts, fetchRecords, patchRecords } from "../actions";
+import { patchRecords } from "../actions";
+import { fetchRecords } from "@/lib/wallet-fetch";
+import { accountsQuery, recordsQuery } from "@/hooks/use-wallet-data";
 import type { Account, WalletRecord, ApiStats } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { AddRecordButton, RecordDetailModal, DuplicateRecordModal, EditRecordModal, RECORD_STATES } from "./AddRecordModal";
 import { BulkActionBar } from "./RecordBulkActions";
 import { AccountEditModal } from "./AccountEditModal";
-import { LabelChip, unwrap } from "./EditControls";
+import { ErrorBox, LabelChip, unwrap } from "./EditControls";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -28,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { ModalTemplate } from "@/templates/modal-template";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TokenConnectForm } from "./TokenConnectForm";
-import { useDashboard } from "./DashboardProvider";
+import { useDashboard, useDashboardSearch } from "./DashboardProvider";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,15 +64,6 @@ function fmtDateLong(iso: string) {
 function maskToken(token: string) {
   if (token.length <= 8) return "•".repeat(token.length);
   return `${token.slice(0, 4)}${"•".repeat(8)}${token.slice(-4)}`;
-}
-
-function periodFrom(period: "3m" | "6m" | "1y" | "all") {
-  if (period === "all") return "2000-01-01";
-  const d = new Date();
-  if (period === "3m") d.setMonth(d.getMonth() - 3);
-  else if (period === "6m") d.setMonth(d.getMonth() - 6);
-  else if (period === "1y") d.setFullYear(d.getFullYear() - 1);
-  return d.toISOString().split("T")[0];
 }
 
 const PERIOD_LABELS: Record<"3m" | "6m" | "1y" | "all", string> = {
@@ -310,14 +303,31 @@ function groupByDate(records: WalletRecord[]) {
   return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
 }
 
+type RecordsPage = { records: WalletRecord[]; nextOffset: number | null };
+
+/** Applies `patch` to a record wherever it's cached: account lists, the all-records list and search results. */
+function updateCachedRecord(queryClient: ReturnType<typeof useQueryClient>, token: string, id: string, patch: Partial<WalletRecord>) {
+  const update = (r: WalletRecord) => (r.id === id ? { ...r, ...patch } : r);
+  queryClient.setQueriesData<InfiniteData<RecordsPage>>({ queryKey: ["records", token] }, (data) =>
+    data && { ...data, pages: data.pages.map((p) => ({ ...p, records: p.records.map(update) })) }
+  );
+  for (const key of ["allRecords", "search"]) {
+    queryClient.setQueriesData<WalletRecord[]>({ queryKey: [key, token] }, (data) => data?.map(update));
+  }
+}
+
 // The badge on a record's icon doubles as a quick status picker.
 function StatusBadge({ record }: { record: WalletRecord }) {
-  const { token, invalidateAll } = useDashboard();
+  const { token, invalidateRecords } = useDashboard();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { mutate: setState, isPending, error } = useMutation({
     mutationFn: async (state: (typeof RECORD_STATES)[number]["id"]) =>
       unwrap(await patchRecords(token, [{ id: record.id, recordState: state }])),
-    onSuccess: () => { setOpen(false); invalidateAll(); },
+    // Show the new status straight away; the refetch afterwards corrects it if the patch failed.
+    onMutate: (state) => updateCachedRecord(queryClient, token, record.id, { recordState: state }),
+    onSuccess: () => setOpen(false),
+    onSettled: invalidateRecords,
   });
 
   const state = record.recordState;
@@ -365,7 +375,8 @@ function StatusBadge({ record }: { record: WalletRecord }) {
   );
 }
 
-function RecordsTable({ records, accounts, highlightedId, onEdit, selectedIds, onToggleSelect }: {
+// Memoized: the records view re-renders on every search keystroke, and re-rendering hundreds of rows each time is what makes typing lag.
+const RecordsTable = memo(function RecordsTable({ records, accounts, highlightedId, onEdit, selectedIds, onToggleSelect }: {
   records: WalletRecord[];
   accounts: Account[];
   highlightedId?: string;
@@ -466,7 +477,7 @@ function RecordsTable({ records, accounts, highlightedId, onEdit, selectedIds, o
       })}
     </div>
   );
-}
+});
 
 // ── Skeleton rows ─────────────────────────────────────────────────────────────
 
@@ -512,9 +523,14 @@ function RecordsSkeleton({ counts = [4, 3] }: { counts?: number[] }) {
 
 // ── Main view ──────────────────────────────────────────────────────────────────
 
+// Stable fallbacks, so memoized derivations don't recompute on every render while data loads.
+const NO_ACCOUNTS: Account[] = [];
+const NO_RECORDS: WalletRecord[] = [];
+
 export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const router = useRouter();
-  const { token, period, searchInput, setSearchInput, debouncedSearch, handleSave, invalidateAll } = useDashboard();
+  const { token, tokenReady, period, handleSave, invalidateRecords } = useDashboard();
+  const { searchInput, setSearchInput, debouncedSearch } = useDashboardSearch();
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
   // `viewingRecord` drives the read-only detail modal; `editingRecord` the edit form opened from it.
   const [viewingRecord, setViewingRecord] = useState<WalletRecord | null>(null);
@@ -523,19 +539,15 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const [editingAccount, setEditingAccount] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
 
-  function toggleSelected(r: WalletRecord) {
+  const toggleSelected = useCallback((r: WalletRecord) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
       return next;
     });
-  }
+  }, []);
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
-  });
+  const { data: accounts = NO_ACCOUNTS, isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(token));
 
   const { data: allRecords = [] } = useQuery({
     queryKey: ["allRecords", token],
@@ -549,27 +561,15 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const {
     data: recordsData,
     isLoading: recordsInitialLoading,
-    isFetching: recordsFetching,
+    error: recordsError,
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["records", token, accountId, period],
-    queryFn: ({ pageParam }) =>
-      fetchRecords(token, {
-        accountId,
-        from: periodFrom(period),
-        offset: pageParam as number,
-        limit: 200,
-      }),
-    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
-    initialPageParam: 0,
-    enabled: !!token,
-  });
+  } = useInfiniteQuery(recordsQuery(token, accountId, period));
 
   const isSearching = debouncedSearch.trim().length > 0;
 
-  const { data: searchResults = [], isFetching: searchFetching } = useQuery({
+  const { data: searchResults = NO_RECORDS, isLoading: searchInitialLoading, isFetching: searchFetching } = useQuery({
     queryKey: ["search", token, debouncedSearch],
     queryFn: async () => {
       const [noteRes, cpRes] = await Promise.all([
@@ -585,6 +585,8 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     },
     enabled: !!token && isSearching,
     staleTime: 30_000,
+    // Keep the previous query's results on screen while the next one loads.
+    placeholderData: keepPreviousData,
   });
 
   // ── Navigation ───────────────────────────────────────────────────────────────
@@ -603,10 +605,14 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
 
   // ── Derived state ────────────────────────────────────────────────────────────
 
-  const records = recordsData?.pages.flatMap((p) => p.records) ?? [];
-  const sorted = (list: WalletRecord[]) =>
-    [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
-  const displayedRecords = sorted(isSearching ? searchResults : records);
+  const records = useMemo(() => recordsData?.pages.flatMap((p) => p.records) ?? NO_RECORDS, [recordsData]);
+  const displayedRecords = useMemo(
+    () =>
+      [...(isSearching ? searchResults : records)].sort(
+        (a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime()
+      ),
+    [isSearching, searchResults, records]
+  );
   const activeAccounts = accounts.filter((a) => !a.archived);
   const currentAccount = accountId === undefined ? undefined : accounts.find((a) => a.id === accountId);
   const selectedAccountName =
@@ -615,11 +621,12 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
       : currentAccount?.name ?? "Records";
   const selectedRecords = selectedIds ? displayedRecords.filter((r) => selectedIds.has(r.id)) : [];
 
-  const initialLoading = !!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0;
-  const recordsLoading = recordsFetching && !isFetchingNextPage;
-  const showRecordsSkeleton = isSearching ? searchFetching : recordsLoading;
+  const initialLoading = !tokenReady || (!!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0);
+  // Only while there's nothing to show for the current account or query —
+  // background refetches (after an edit, on window focus) keep the list up.
+  const showRecordsSkeleton = isSearching ? searchInitialLoading : recordsInitialLoading;
 
-  if (!token) {
+  if (tokenReady && !token) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 
@@ -642,7 +649,13 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
   }
 
   if (!(activeAccounts.length > 0 || records.length > 0)) {
-    return null;
+    // A failed load would otherwise leave the page blank.
+    const error = accountsError ?? recordsError;
+    return error ? (
+      <div className="px-6 py-6">
+        <ErrorBox error={error} />
+      </div>
+    ) : null;
   }
 
   return (
@@ -690,7 +703,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
               accounts={activeAccounts}
               records={allRecords}
               defaultAccountId={accountId}
-              onSuccess={invalidateAll}
+              onSuccess={invalidateRecords}
               onGoToRecord={handleGoToRecord}
               onOpenRecord={setViewingRecord}
             />
@@ -735,7 +748,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           accounts={accounts}
           onSelectAll={() => setSelectedIds(new Set(displayedRecords.map((r) => r.id)))}
           onClear={() => setSelectedIds(null)}
-          onDone={() => { setSelectedIds(new Set()); invalidateAll(); }}
+          onDone={() => { setSelectedIds(new Set()); invalidateRecords(); }}
         />
       )}
 
@@ -766,7 +779,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           onClose={() => setViewingRecord(null)}
           onDuplicate={() => { setDuplicatingRecord(viewingRecord); setViewingRecord(null); }}
           onEdit={() => { setEditingRecord(viewingRecord); setViewingRecord(null); }}
-          onDeleted={invalidateAll}
+          onDeleted={invalidateRecords}
         />
       )}
       {editingRecord && (
@@ -777,7 +790,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           records={allRecords}
           isOpen={!!editingRecord}
           onClose={() => setEditingRecord(null)}
-          onSuccess={invalidateAll}
+          onSuccess={invalidateRecords}
           onOpenRecord={setViewingRecord}
         />
       )}
@@ -796,7 +809,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           records={allRecords}
           isOpen={!!duplicatingRecord}
           onClose={() => setDuplicatingRecord(null)}
-          onSuccess={() => { setDuplicatingRecord(null); invalidateAll(); }}
+          onSuccess={() => { setDuplicatingRecord(null); invalidateRecords(); }}
           onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
           onOpenRecord={(rec) => { setDuplicatingRecord(null); setViewingRecord(rec); }}
         />

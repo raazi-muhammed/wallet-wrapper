@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { differenceInCalendarDays, format, parseISO, startOfDay, subDays } from "date-fns";
-import { fetchAccounts, fetchStandingOrders, fetchStandingOrderItems } from "../actions";
+import { fetchAccounts, fetchStandingOrders, fetchStandingOrderItems } from "@/lib/wallet-fetch";
 import type { Account, Category, StandingOrder, StandingOrderItem } from "../actions";
 import { getAccountIcon, getCategoryIcon } from "@/lib/utils";
 import { useCategories } from "@/hooks/use-wallet-data";
@@ -277,7 +277,7 @@ function PlannedPayments({
 }
 
 export function PlannedPaymentsView() {
-  const { token, handleSave } = useDashboard();
+  const { token, tokenReady, handleSave } = useDashboard();
   const overdueFrom = format(subDays(new Date(), OVERDUE_LOOKBACK_DAYS), "yyyy-MM-dd");
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
@@ -300,11 +300,11 @@ export function PlannedPaymentsView() {
 
   const { data: categories = [] } = useCategories(token);
 
-  if (!token) {
+  if (tokenReady && !token) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 
-  if (ordersLoading || itemsLoading) {
+  if (!tokenReady || ordersLoading || itemsLoading) {
     return (
       <div className="px-6 py-6 space-y-4">
         <Skeleton className="h-5 w-40" />

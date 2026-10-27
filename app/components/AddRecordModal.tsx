@@ -22,7 +22,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchRecords, createRecords, patchRecords, deleteRecords } from "../actions";
+import { createRecords, patchRecords, deleteRecords } from "../actions";
+import { fetchRecords } from "@/lib/wallet-fetch";
 import type { Account, Category, WalletRecord } from "../actions";
 import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -21,12 +21,13 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAccounts, fetchApiStats } from "../actions";
+import { accountsQuery, recordsQuery, statsQuery } from "@/hooks/use-wallet-data";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { useDashboard } from "./DashboardProvider";
 import { SettingsPopover } from "./AccountRecordsView";
 import { ManageDataModal } from "./ManageDataModal";
+import { ErrorBox } from "./EditControls";
 
 function fmt(amount: number | undefined, currency: string | undefined) {
   if (amount == null || !currency) return "—";
@@ -79,6 +80,11 @@ function SidebarSkeleton() {
 }
 
 function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: string }) {
+  const { token, period } = useDashboard();
+  const queryClient = useQueryClient();
+  // Start loading an account's records on hover, so they're usually ready by the time it's clicked.
+  const prefetchRecords = (accountId?: string) => queryClient.prefetchInfiniteQuery(recordsQuery(token, accountId, period));
+
   return (
     <>
       <SidebarContent className="pt-1 pb-4">
@@ -87,7 +93,7 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
             <SidebarMenu className="gap-0 rounded-lg overflow-hidden bg-card">
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/"} size="lg" className="rounded-none px-3">
-                  <Link href="/">
+                  <Link href="/" onPointerEnter={() => prefetchRecords()} onFocus={() => prefetchRecords()}>
                     <HugeiconsIcon icon={LayoutListIcon} className="size-4 shrink-0" />
                     <span className="font-medium">All Accounts</span>
                   </Link>
@@ -137,6 +143,8 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                         <div className={`group/row relative flex items-center gap-1 px-3 py-3 transition-colors ${isActive ? "bg-sidebar-accent/10 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-0.5 before:rounded-full before:bg-sidebar-primary" : "hover:bg-sidebar-accent/10"}`}>
                           <Link
                             href={`/account/${a.id}`}
+                            onPointerEnter={() => prefetchRecords(a.id)}
+                            onFocus={() => prefetchRecords(a.id)}
                             className="flex-1 flex items-center gap-2.5 min-w-0 text-left"
                           >
                             <div className="size-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${a.color ?? "var(--muted-foreground)"}22` }}>
@@ -168,31 +176,28 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
 }
 
 export function AccountSidebarList() {
-  const { token, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
+  const { token, tokenReady, period, setPeriod, handleSave, handleDisconnect } = useDashboard();
   const pathname = usePathname();
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ["accounts", token],
-    queryFn: () => fetchAccounts(token),
-    enabled: !!token,
-  });
-
-  const { data: stats = null } = useQuery({
-    queryKey: ["stats", token],
-    queryFn: () => fetchApiStats(token),
-    enabled: !!token,
-  });
+  const { data: accounts = [], isLoading: accountsLoading, error: accountsError } = useQuery(accountsQuery(token));
+  const { data: stats = null } = useQuery(statsQuery(token));
 
   const activeAccounts = accounts.filter((a) => !a.archived);
-  const initialLoading = !!token && accountsLoading && activeAccounts.length === 0;
+  const initialLoading = !tokenReady || (!!token && accountsLoading && activeAccounts.length === 0);
 
-  if (!token) return null;
+  if (tokenReady && !token) return null;
 
   let content: React.ReactNode;
   if (initialLoading) {
     content = <SidebarSkeleton />;
   } else if (activeAccounts.length > 0) {
     content = <SidebarBody accounts={activeAccounts} pathname={pathname} />;
+  } else if (accountsError) {
+    content = (
+      <div className="px-4 pt-2">
+        <ErrorBox error={accountsError} />
+      </div>
+    );
   } else {
     return null;
   }

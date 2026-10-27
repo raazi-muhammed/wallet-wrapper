@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { fetchAccounts } from "../actions";
+import { fetchAccounts } from "@/lib/wallet-fetch";
 import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -151,7 +151,7 @@ function InsightsView({ accounts }: { accounts: Account[] }) {
 }
 
 export function InsightsPageView() {
-  const { token, handleSave } = useDashboard();
+  const { token, tokenReady, handleSave } = useDashboard();
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["accounts", token],
@@ -160,9 +160,9 @@ export function InsightsPageView() {
   });
 
   const activeAccounts = accounts.filter((a) => !a.archived);
-  const initialLoading = !!token && accountsLoading && activeAccounts.length === 0;
+  const initialLoading = !tokenReady || (!!token && accountsLoading && activeAccounts.length === 0);
 
-  if (!token) {
+  if (tokenReady && !token) {
     return <TokenConnectForm onSave={handleSave} />;
   }
 

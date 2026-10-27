@@ -10,9 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModalTemplate } from "@/templates/modal-template";
+import { fetchAccounts, fetchBudgets } from "@/lib/wallet-fetch";
 import {
-  fetchAccounts,
-  fetchBudgets,
   patchBudgets,
   patchCategories,
   createSubcategory,
@@ -374,7 +373,7 @@ function BudgetsTab({ onOpen }: { onOpen: (b: Budget) => void }) {
 }
 
 function BudgetForm({ budget, onDone }: { budget: Budget; onDone: () => void }) {
-  const { token, invalidateAll } = useDashboard();
+  const { token, invalidateBudgets } = useDashboard();
   const { data: accounts = [] } = useQuery({ queryKey: ["accounts", token], queryFn: () => fetchAccounts(token), enabled: !!token });
   const { data: categories = [] } = useCategories(token);
   const { data: labels = [] } = useLabels(token);
@@ -411,7 +410,7 @@ function BudgetForm({ budget, onDone }: { budget: Budget; onDone: () => void }) 
       if (labelDiff) patch.labelIds = labelDiff;
       if (Object.keys(patch).length > 1) unwrap(await patchBudgets(token, [patch]));
     },
-    onSuccess: () => { invalidateAll(); onDone(); },
+    onSuccess: () => { invalidateBudgets(); onDone(); },
   });
 
   if (readOnly) {

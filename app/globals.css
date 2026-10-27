@@ -5,7 +5,8 @@
 @theme inline {
   --font-sans: var(--font-inter);
   --font-mono: var(--font-fira-code);
-  --font-display: var(--font-fira-code);
+  --font-display: var(--font-mona);
+  --font-display--font-variation-settings: "wdth" 125;
 
   /* ── Core surfaces ─────────────────────────── */
   --color-background:      var(--background);

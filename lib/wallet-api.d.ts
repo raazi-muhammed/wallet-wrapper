@@ -277,7 +277,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Entities
-         * @description Delete one or more entities by ID. The entity type is specified in the URL path. Maximum 10 IDs per request. For categories, records, accounts, and labels, use the references endpoint first to check if they are referenced by other entities. Budgets, standing-orders, and record-rules are not referenced by other entities, so no reference check is needed.
+         * @description Delete one or more entities by ID. The entity type is specified in the URL path. Maximum 10 IDs per request. For categories, records, accounts, labels, and orders, use the references endpoint first to check if they are referenced by other entities. Budgets, standing-orders, and record-rules are not referenced by other entities, so no reference check is needed. Paired transfer records delete as a pair: both IDs must be in the same request, otherwise the delete is rejected and the error names the missing leg. `orders` is Board-only (Wallet returns 404).
          */
         delete: operations["deleteByType"];
         options?: never;
@@ -294,7 +294,7 @@ export interface paths {
         };
         /**
          * Get Entity References (Batch)
-         * @description Returns which entities reference the given entities. Accepts up to 10 comma-separated IDs via the id query parameter. Response is a map keyed by entity ID. Supported types: categories (returns records, standingOrders, budgets, recordRules), records (returns standingOrders via items.recordIds), accounts (returns records, standingOrders, budgets, recordRules, other), labels (returns records, standingOrders, budgets, recordRules, other).
+         * @description Returns which entities reference the given entities. Accepts up to 20 comma-separated IDs via the id query parameter. Response is a map keyed by entity ID. Supported types: categories (returns records, standingOrders, budgets, recordRules), records (returns standingOrders via items.recordIds), accounts (returns records, standingOrders, budgets, recordRules, other), labels (returns records, standingOrders, budgets, recordRules, other), orders (returns other — Template documents referencing the order; Board-only).
          */
         get: operations["getReferences"];
         put?: never;
@@ -367,7 +367,10 @@ export interface components {
              *     }
              */
             balance?: components["schemas"]["AccountBalance"] | null;
-            /** @example CZ65 0800 0000 1920 0014 5399 */
+            /**
+             * @description Bank account number or IBAN as stored (max 80 chars). Absent when the account has none.
+             * @example CZ65 0800 0000 1920 0014 5399
+             */
             bankAccountNumber?: string;
             /**
              * @description Hex color code
@@ -379,6 +382,11 @@ export interface components {
              * @example 2021-03-24T09:28:41.200Z
              */
             createdAt?: string;
+            /**
+             * @description The account's currency (ISO 4217). Also repeated inside balance so amounts are self-describing — the two values are always identical. Empty string when the currency could not be resolved.
+             * @example USD
+             */
+            currencyCode?: string;
             /** @example false */
             excludeFromStats?: boolean;
             /**
@@ -386,14 +394,6 @@ export interface components {
              * @example 6ba7b810-9dad-11d1-80b4-00c04fd430c8
              */
             id?: string;
-            /**
-             * @description Account balance before any recorded transaction activity, in the account's original currency
-             * @example {
-             *       "currencyCode": "USD",
-             *       "value": 1500.5
-             *     }
-             */
-            initialBalance?: components["schemas"]["AmountWithCurrency"] | null;
             /**
              * @description Whether this account is connected to a bank via automatic sync (e.g. SaltEdge, Plaid). Read-only.
              * @example false
@@ -516,6 +516,8 @@ export interface components {
         BatchSummary: {
             /** @description Items that failed due to invalid input (client errors) */
             clientErrors: number;
+            /** @description Documents actually written or removed, counted from confirmed write outcomes and deduplicated. NOT a copy of `succeeded`: on delete, a repeated id is idempotent, so `succeeded` counts input rows and this counts DISTINCT documents removed — and a retried delete of an already-deleted document reports success with 0 here, because that call wrote nothing. On create it can EXCEED `total`: an auto-created transfer mirror, a rewritten pairing target, and a CRM order document rewritten by an orderId bind are all counted here without being items. */
+            documentsWritten: number;
             /** @description Items that failed due to internal errors (server errors) */
             serverErrors: number;
             /** @description Successfully processed items */
@@ -525,7 +527,7 @@ export interface components {
         };
         Budget: {
             accountIds?: string[];
-            /** @description Array of category IDs. System categories use deterministic IDs (e.g. "5c5c03e8-000a-8000-8000-000000000000"), custom categories use standard IDs. */
+            /** @description Array of category IDs. System categories use deterministic IDs, custom categories use standard IDs. */
             categoryIds?: string[];
             closed?: boolean | null;
             /**
@@ -550,10 +552,10 @@ export interface components {
             labelIds?: string[];
             /** Format: double */
             limit?: number | null;
-            /** @description Current+future period-specific limit overrides. Each entry: {limit (number), periodStart (YYYY-MM-DD), period (YYYY-MM / YYYY-Www / YYYY), createdAt (datetime, optional)}. Empty array means uniform limit across all periods. */
+            /** @description Limit overrides in force now or later. EFFECTIVE-FROM: each entry sets the limit for its period and every period after it, until a later entry takes over, so the first entry may have a periodStart in the past — that is the override currently in force. Each entry: {limit (number), periodStart (YYYY-MM-DD), period (YYYY-MM / YYYY-Www / YYYY), periodCount (int, how many periods this entry governs — absent means open-ended, nothing after it takes over), createdAt (datetime, optional)}. Empty array means uniform limit across all periods. */
             limitOverrides?: components["schemas"]["BudgetChangeEntry"][];
             name?: string;
-            /** @description Past period-specific limit overrides (before current period). Same shape as limitOverrides. Empty array means no past overrides. */
+            /** @description Limit overrides that a later entry has already superseded — they no longer affect any period. Same shape as limitOverrides. Empty array means no superseded overrides. */
             pastLimitOverrides?: components["schemas"]["BudgetChangeEntry"][];
             spending?: components["schemas"]["BudgetSpending"];
             /**
@@ -577,15 +579,16 @@ export interface components {
             /** Format: double */
             limit?: number;
             period?: string;
+            periodCount?: number;
             periodStart?: string;
         };
         BudgetPeriodSpending: {
             convertedCurrencies?: string[];
+            /** Format: double */
+            effectiveLimit?: number;
             error?: string;
             excluded?: components["schemas"]["ExcludedBreakdown"];
             incomplete?: boolean;
-            /** Format: double */
-            limit?: number;
             /** Format: double */
             overspent?: number | null;
             period?: string;
@@ -631,7 +634,13 @@ export interface components {
             /** @example 04f8dea1-33dc-411a-b2eb-b348c3168fa3 */
             id?: string;
             name?: string;
+            /** @description UUID of the parent base category. Present for custom categories only. */
             parentId?: string;
+            /**
+             * @description Display name of the parent base category, exactly as GET /categories renders it. Present for custom categories only.
+             * @example Groceries
+             */
+            parentName?: string;
             /**
              * @description System category identifier (envelope slug). Present for system categories.
              * @example food_and_drinks__groceries
@@ -660,6 +669,11 @@ export interface components {
              * @example Health & beauty
              */
             name?: string;
+            /**
+             * @description ID of the parent base category. Present for custom categories only; same value as parentId in GET /categories.
+             * @example 5c5c03e8-000a-8000-8000-000000000000
+             */
+            parentId?: string;
         } | null;
         CategoryGroup: {
             /**
@@ -710,7 +724,7 @@ export interface components {
         CreateAccountRequest: {
             /** @enum {string} */
             accountType: "General" | "Cash" | "CurrentAccount" | "SavingAccount" | "Insurance";
-            /** @description Bank account number or IBAN (max 80 chars) */
+            /** @description Bank account number or IBAN (max 80 chars). Optional — omit it entirely if the full number is unavailable or cannot be shared; the account is created without one. A partial or masked value such as <code>****5399</code> is rejected. */
             bankAccountNumber?: string;
             /**
              * @description Universal color name. Randomly assigned if omitted.
@@ -721,18 +735,20 @@ export interface components {
             currencyCode: string;
             /** @default false */
             excludeFromStats: boolean;
-            /** @description Initial balance amount (e.g. 1500.50) */
+            /** @description Initial balance amount (e.g. 1500.50). INPUT ONLY — it is not returned on the account object; read it back as balance.initial (with balance.currencyCode alongside). */
             initialBalance: number;
             name: string;
         };
         CreateAccountResponse: {
             account?: components["schemas"]["Account"];
             agentHints?: components["schemas"]["AgentHintsArray"];
+            /** @description Standard write summary (A7): total 1, succeeded 1, documentsWritten 1 on the success this envelope reports. */
+            summary?: components["schemas"]["BatchSummary"];
         };
         /**
          * @example {
          *       "categoryIds": [
-         *         "5c5c03e8-000a-8000-8000-000000000000"
+         *         "550e8400-e29b-41d4-a716-446655440000"
          *       ],
          *       "currencyCode": "USD",
          *       "limit": 300,
@@ -775,10 +791,14 @@ export interface components {
         CreateBudgetResponse: {
             agentHints?: components["schemas"]["AgentHintsArray"];
             budget?: components["schemas"]["Budget"];
+            /** @description Standard write summary (A7): total 1, succeeded 1, documentsWritten 1 on the success this envelope reports. */
+            summary?: components["schemas"]["BatchSummary"];
         };
         CreateCategoryResponse: {
             agentHints?: components["schemas"]["AgentHintsArray"];
             category?: components["schemas"]["Category"];
+            /** @description Standard write summary (A7): total 1, succeeded 1, documentsWritten 1 on the success this envelope reports. */
+            summary?: components["schemas"]["BatchSummary"];
         };
         /**
          * @example {
@@ -798,6 +818,8 @@ export interface components {
         CreateLabelResponse: {
             agentHints?: components["schemas"]["AgentHintsArray"];
             label?: components["schemas"]["Label"];
+            /** @description Standard write summary (A7): total 1, succeeded 1, documentsWritten 1 on the success this envelope reports. */
+            summary?: components["schemas"]["BatchSummary"];
         };
         /**
          * @example {
@@ -808,7 +830,6 @@ export interface components {
          *       "categoryId": "5c5c07d0-0014-8000-8000-000000000000",
          *       "counterParty": "Downtown Bistro",
          *       "note": "Lunch at restaurant",
-         *       "paymentType": "debit_card",
          *       "recordDate": "2025-03-15T14:30:00Z"
          *     }
          */
@@ -822,17 +843,12 @@ export interface components {
                 /** @description Amount value (negative=expense, positive=income). Must not be zero. */
                 value: number;
             };
-            /** @description Category ID. System categories use deterministic IDs (e.g. '5c5c03e8-000a-8000-8000-000000000000'), custom categories use standard IDs. */
+            /** @description Category ID. System categories use deterministic IDs, custom categories use standard IDs. */
             categoryId?: string;
             /** @description Payee/merchant name */
             counterParty?: string;
             labelIds?: string[];
             note?: string;
-            /**
-             * @description Payment method.
-             * @enum {string}
-             */
-            paymentType: "cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment";
             /** @description Location data (optional) */
             place?: components["schemas"]["PlaceInput"];
             /**
@@ -845,10 +861,31 @@ export interface components {
              * @enum {string}
              */
             recordState?: "reconciled" | "cleared" | "uncleared";
+            /** @description Account movement settings. Omit for regular records. Requires pairingMode: 'new' (paired, two linked records), 'existing' (pair to existing record), or 'unpaired'. */
+            transfer?: {
+                /** @description Target account (pairingMode 'new'). */
+                accountId?: string;
+                /** @description Amount on the counter account (cross-currency 'new' only). Opposite sign to record amount. Omit to auto-convert via FX. */
+                counterAmount?: {
+                    /** @description Must match counter account's currency code. */
+                    currencyCode: string;
+                    /** @description Numeric amount (opposite sign to record amount). */
+                    value: number;
+                };
+                /**
+                 * @description Required. 'new' = create mirror on target account, 'existing' = bind to existing record, 'unpaired' = no mirror.
+                 * @enum {string}
+                 */
+                pairingMode: "new" | "existing" | "unpaired";
+                /** @description Existing record to bind to (pairingMode 'existing'). Target must be on a different account, have opposite amount sign, and not already be paired. */
+                recordId?: string;
+            };
         };
         CreateRecordsResponse: {
             /** @description Per-item results, one entry per input record */
             results?: {
+                /** @description ID of the auto-created B-side of a paired transfer — present only when THIS call wrote that document (pairingMode "new"). Absent when the item is not a paired transfer, or when mirror creation failed (best-effort — a transfer.mirror_failed agent hint reports that case and the item still counts as succeeded). Survives returnData=false; the mirror's body is not returned — read transfer.mirrorRecord on the source, or fetch by this id. */
+                createdMirrorRecordId?: string;
                 /** @description Error message (on failure) */
                 error?: string;
                 /**
@@ -856,6 +893,8 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 /** @description Record ID (present only when created) */
                 id?: string;
                 /** @description 0-based index in the input records array */
@@ -909,10 +948,26 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent for item-level errors */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 success?: boolean;
             }[];
             summary?: components["schemas"]["BatchSummary"];
+        };
+        /**
+         * @description Returned when the token is valid but the account may not use the API: no active Premium subscription (`PREMIUM_REQUIRED`), API access not enabled in the web app (`API_CONSENT_REQUIRED`), or both.
+         * @example {
+         *       "code": "PREMIUM_REQUIRED",
+         *       "error": "Your Premium subscription is not active. REST API and MCP access require an active Premium subscription."
+         *     }
+         */
+        EntitlementError: {
+            /** @enum {string} */
+            code: "PREMIUM_REQUIRED" | "API_CONSENT_REQUIRED" | "API_CONSENT_AND_PREMIUM_REQUIRED";
+            error: string;
         };
         /**
          * @example {
@@ -924,7 +979,6 @@ export interface components {
             error?: string;
         };
         ExcludedBreakdown: {
-            archivedAccounts?: number;
             debts?: number;
             incomeCategories?: number;
             total?: number;
@@ -1036,8 +1090,28 @@ export interface components {
             limit?: number;
             /** @description Starting period. Format: YYYY-MM (monthly), YYYY-Www (weekly), YYYY (yearly). Must be >= current period. */
             period: string;
-            /** @description If true, reverts to the budget's baseline limit at this period. Mutually exclusive with limit. */
+            /** @description How many periods this override lasts, COUNTING ITS OWN: 1 = this period only. Omit for an open-ended override. Requires limit; not allowed with setBaseline. The server writes the entry that ends the override, restoring the limit actually in force at that period. Rejected if another entry in the same call starts inside the span. */
+            periodCount?: number;
+            /** @description If true, writes an entry holding the budget's current limit, ending any earlier override from this period onward. Entries carry a fixed value, so a later change to the budget's limit does not move it — use resetLimit to clear all overrides instead. Mutually exclusive with limit and with periodCount. */
             setBaseline?: boolean;
+        };
+        MirrorRecordEmbed: {
+            /** @description Account ID of the linked transfer record */
+            accountId?: string;
+            /**
+             * @description Amount of the linked transfer record
+             * @example {
+             *       "currencyCode": "USD",
+             *       "value": 42.5
+             *     }
+             */
+            amount?: components["schemas"]["AmountWithCurrency"] | null;
+            /** @description Counter party of the linked transfer record */
+            counterParty?: string;
+            /** @description ID of the linked transfer record (other side of the transfer) */
+            id?: string;
+            /** @description Note from the linked transfer record */
+            note?: string;
         };
         PaginatedResponse: {
             /** @description Number of items per page (applied limit) */
@@ -1060,7 +1134,7 @@ export interface components {
          */
         PatchAccountItem: {
             archived?: boolean;
-            /** @description Bank account number or IBAN (max 80 chars). Empty string clears the value. */
+            /** @description Bank account number or IBAN (max 80 chars). Empty string clears the value; omit the field to leave the stored value unchanged. A partial or masked value such as <code>****5399</code> is rejected — omit it instead. */
             bankAccountNumber?: string;
             /**
              * @description Universal color name.
@@ -1069,7 +1143,7 @@ export interface components {
             color?: "Blue" | "Charcoal" | "CoffeeBrown" | "DarkPurple" | "Green" | "LightBlue" | "Lime" | "Orange" | "PineGreen" | "Pink" | "Purple" | "Red" | "Stone" | "Turquoise" | "Wine" | "Yellow";
             excludeFromStats?: boolean;
             id: string;
-            /** @description Initial balance amount (e.g. 1000.00). Omit = no change. */
+            /** @description Initial balance amount (e.g. 1000.00). Omit = no change. INPUT ONLY — it is not returned on the account object; read it back as balance.initial. */
             initialBalance?: number;
             name?: string;
         };
@@ -1085,7 +1159,11 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 success?: boolean;
             }[];
             summary?: components["schemas"]["PatchSummary"];
@@ -1115,7 +1193,7 @@ export interface components {
                 add?: string[];
                 remove?: string[];
             };
-            /** @description Array of period-specific limit overrides (max 50). Replaces all current+future overrides. Not allowed on BUDGET_CUSTOM. */
+            /** @description Array of limit overrides (max 50), EFFECTIVE-FROM: each entry sets the limit for its period and every period after it, until the next entry takes over. To bound an override to N periods, set periodCount on the entry (periodCount 1 = that period only). Replaces all current+future overrides — one you do not re-send is deleted, not merged, including any part beyond your own entries (past overrides are preserved). Not allowed on BUDGET_CUSTOM. */
             limitOverrides?: components["schemas"]["LimitOverrideInput"][];
             /** @description Budget display name */
             name?: string;
@@ -1139,7 +1217,11 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 success?: boolean;
             }[];
             summary?: components["schemas"]["PatchSummary"];
@@ -1156,7 +1238,11 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 success?: boolean;
             }[];
             summary?: components["schemas"]["PatchSummary"];
@@ -1175,16 +1261,16 @@ export interface components {
              */
             cardinality?: "none" | "must" | "need" | "want";
             /**
-             * @description Universal color name (sets customColor=true).
+             * @description Universal color name.
              * @enum {string}
              */
             color?: "Blue" | "Charcoal" | "CoffeeBrown" | "DarkPurple" | "Green" | "LightBlue" | "Lime" | "Orange" | "PineGreen" | "Pink" | "Purple" | "Red" | "Stone" | "Turquoise" | "Wine" | "Yellow";
             /** @description Category ID (system or custom) */
             id: string;
-            /** @description New name (sets customName=true). Cannot be used together with resetName. */
+            /** @description New name (sets customName=true). Cannot be used together with reset:["name"]. */
             name?: string;
-            /** @description Set to true to reset name back to the system default. Only works on non-custom (base) categories. Sets customName=false. Cannot be used together with name. */
-            resetName?: boolean;
+            /** @description Restore fields to the base (system) category default. Base categories only — custom subcategories have no defaults. A field cannot be both set and reset in the same call. reset:["color"] restores the colour of the category's ENVELOPE GROUP, shared by every category in that group — not the colour this category had before you changed it. A colour that arrived from one of the mobile or web apps outside the 16 universal colours is therefore not recoverable: reset writes the group colour, and the original cannot be written back because color only accepts the 16. Read the current colour first if you may want it again. */
+            reset?: ("name" | "cardinality" | "color")[];
         };
         /**
          * @example {
@@ -1215,7 +1301,11 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 /** @description Full label object on success (same shape as GET response) */
                 label?: components["schemas"]["Label"];
                 success?: boolean;
@@ -1231,8 +1321,8 @@ export interface components {
          *     }
          */
         PatchRecordItem: {
-            /** @description Fields to clear/reset. Example: ["note", "place"]. Cannot be combined with an explicit value for the same field. */
-            $clear?: ("categoryId" | "labelIds" | "note" | "counterParty" | "place")[];
+            /** @description Fields to clear/reset. Example: ["note", "place"]. 'transfer' cancels transfer state (sets category to Unknown). Cannot be combined with an explicit value for the same field. */
+            $clear?: ("categoryId" | "labelIds" | "note" | "counterParty" | "place" | "transfer")[];
             /** @description Move record to a different account (UUID). Both accounts must not be bank-synced and must have the same currency. */
             accountId?: string;
             /** @description Transaction amount. Omit = no change. Negative=expense, positive=income. Auto-updates recordType. Patching amount ALWAYS sets the record's currency to the account's currency, regardless of the record's original currency. If amount is omitted from the patch, the original currency is preserved. */
@@ -1252,11 +1342,6 @@ export interface components {
                 remove?: string[];
             };
             note?: string;
-            /**
-             * @description Payment method. On paired transfer records (those with a linked mirror), amount/recordDate/recordState cannot be patched.
-             * @enum {string}
-             */
-            paymentType?: "cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment";
             /** @description Location data. Omit=no change. Full replace with {address, latitude, longitude, name}. Use $clear to erase. */
             place?: components["schemas"]["PlaceInput"];
             /** Format: date-time */
@@ -1277,7 +1362,11 @@ export interface components {
                  * @enum {string}
                  */
                 errorType?: "client_error" | "server_error";
+                /** @description Input field names the error is attributable to; absent when the error belongs to the item as a whole */
+                fields?: string[];
                 id?: string;
+                /** @description 0-based position of the input item this result answers — the uniform correlation key across every write endpoint. */
+                inputIndex?: number;
                 /** @description Full record object on success (same shape as GET response) */
                 record?: components["schemas"]["Record"];
                 success?: boolean;
@@ -1288,6 +1377,8 @@ export interface components {
         PatchSummary: {
             /** @description Items that failed due to invalid input (client errors) */
             clientErrors: number;
+            /** @description Documents actually written, counted from confirmed write outcomes and deduplicated — independent of item success: an item that failed AFTER its document committed still counts its document, and the error text says what landed. A no-op item (fields already hold the sent values) succeeds with 0 here. Can EXCEED `total` on records: a created mirror, severing, orphaning, converting a target, propagating to a mirror, or rewriting a CRM order document for an orderId bind each write another document, and every one of them is counted here. */
+            documentsWritten: number;
             /** @description Items that failed due to internal errors (server errors) */
             serverErrors: number;
             /** @description Successfully updated items */
@@ -1350,11 +1441,6 @@ export interface components {
             /** @description Labels attached to this record */
             labels?: components["schemas"]["LabelEmbed"][];
             note?: string;
-            /**
-             * @description Payment method: cash, debit_card, credit_card, transfer, voucher, mobile_payment, web_payment
-             * @enum {string}
-             */
-            paymentType?: "cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment";
             /** @description Photos attached to this record */
             photos?: components["schemas"]["RecordPhoto"][];
             place?: components["schemas"]["RecordPlace"];
@@ -1371,7 +1457,7 @@ export interface components {
              */
             recordState?: "reconciled" | "cleared" | "uncleared" | "void" | "waitForAssign";
             /**
-             * @description Transaction type: income (money received) or expense (money spent)
+             * @description Transaction type: income (money received) or expense (money spent). Derived from the amount sign (amount < 0 = expense); a legacy record with an amount of exactly 0 keeps the type it was stored with.
              * @example expense
              * @enum {string}
              */
@@ -1381,8 +1467,8 @@ export interface components {
              * @enum {string}
              */
             source?: "android" | "ios" | "web" | "rest" | "mcp" | "backend" | "missing";
-            /** @description Linked transfer record details (populated when this record is part of a transfer pair). Read-only. */
-            transferRecord?: components["schemas"]["TransferRecordEmbed"];
+            /** @description Transfer state. Null for regular records. 'paired' = a linked mirror record exists between the user's own accounts (mirrorRecord present). 'unpaired' = transfer with no linked mirror — either to/from an external account the user doesn't track, or between own accounts where the link was severed or never established. transferId is the primary transfer identity, present on every transfer: absent = not a transfer, held by one record = unpaired, shared by two = paired. Pairing follows that cardinality. A record whose pair was severed keeps its transferId as a singleton and is simply an unpaired transfer. Read-only, never accepted as input. */
+            transfer?: components["schemas"]["TransferOutput"] | null;
             /**
              * Format: date-time
              * @example 2021-03-24T09:28:41.200Z
@@ -1499,8 +1585,6 @@ export interface components {
              * @example 12
              */
             paymentCount?: number;
-            /** @enum {string} */
-            paymentType?: "cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment";
             /** @description RRULE format */
             recurrenceRule?: string;
             /**
@@ -1560,23 +1644,10 @@ export interface components {
             max?: string;
             min?: string;
         };
-        TransferRecordEmbed: {
-            /** @description Account ID of the linked transfer record */
-            accountId?: string;
-            /**
-             * @description Amount of the linked transfer record
-             * @example {
-             *       "currencyCode": "USD",
-             *       "value": 42.5
-             *     }
-             */
-            amount?: components["schemas"]["AmountWithCurrency"] | null;
-            /** @description Counter party of the linked transfer record */
-            counterParty?: string;
-            /** @description ID of the linked transfer record (other side of the transfer) */
-            id?: string;
-            /** @description Note from the linked transfer record */
-            note?: string;
+        TransferOutput: {
+            mirrorRecord?: components["schemas"]["MirrorRecordEmbed"];
+            transferId?: string;
+            type?: string;
         };
         /**
          * @description Returned when authentication fails (invalid/expired token or missing Authorization header)
@@ -1684,7 +1755,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -1748,7 +1830,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -1839,7 +1932,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -1940,7 +2044,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2043,7 +2158,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2107,7 +2233,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2198,7 +2335,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2251,6 +2399,8 @@ export interface operations {
                 updatedAt?: string;
                 /** @description Filter by category type. true=custom subcategories only, false=system categories only. */
                 customCategory?: boolean;
+                /** @description Filter by the category's spending nature, matching the value shown in the response. A category with no cardinality of its own inherits its base category's value, so filtering by an inherited value also returns categories that merely inherit it. cardinality=none returns categories explicitly set to none plus any with no value to inherit. */
+                cardinality?: "none" | "must" | "need" | "want";
                 /** @description Filter by archived status. true=archived only, false=active only, omit for all. */
                 archived?: boolean;
                 /** @description Filter items tracked by a specific budget. */
@@ -2296,7 +2446,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2387,7 +2548,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2456,7 +2628,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2543,7 +2726,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2640,7 +2834,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2704,7 +2909,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2795,7 +3011,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2887,7 +3114,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -2919,7 +3157,7 @@ export interface operations {
             query?: {
                 /** @description Filter by ID. Supports comma-separated list for multiple IDs (max 30). */
                 id?: string;
-                /** @description Filter by account ID (exact match). When omitted, returns records from all accounts. Use /accounts to find valid account IDs. */
+                /** @description Filter by account ID(s), comma-separated (max 10). When omitted, returns records from all accounts. Use /accounts to find valid account IDs. */
                 accountId?: string;
                 /** @description Filter by transaction date. Requires range <a href="#query-filter-prefixes">prefix</a> (e.g. <code>gte.2024-01-01</code>, <code>lt.2024-04-01</code>). If omitted, a default 3-month window is applied automatically. Provide any single bound to override the default. The actual applied filter is returned in <code>appliedRecordDateFilters</code>. */
                 recordDate?: string;
@@ -2945,10 +3183,12 @@ export interface operations {
                 createdAt?: string;
                 /** @description Filter by last sync timestamp (when entity was last updated in the API database). Requires range <a href="#query-filter-prefixes">prefix</a>. */
                 updatedAt?: string;
-                /** @description Filter by record type. */
+                /** @description Filter by record type. Matches on the amount sign (expense = amount < 0, income = amount > 0); a legacy record with an amount of exactly 0 matches the type it was stored with. */
                 recordType?: "expense" | "income";
-                /** @description Filter by payment type. */
-                paymentType?: "cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment";
+                /** @description Filter by transfer state: true = only transfer records (paired or unpaired), false = only non-transfer records, omit = all. Independent of recordType. */
+                isTransfer?: boolean;
+                /** @description Filter by transfer identity, as returned in transfer.transferId. Returns every record sharing it: both legs of a pair, or the single record of an unpaired transfer. Comma-separated for multiple values. */
+                transferId?: string;
                 /** @description Filter by record state. Comma-separated for multiple values (e.g. recordState=reconciled,uncleared). Valid values: reconciled, cleared, uncleared. */
                 recordState?: string;
                 /** @description Filter by record creation source. Comma-separated for multiple values (e.g. source=mcp,rest). Valid values: android, ios, web, rest, mcp, backend, missing. */
@@ -3014,7 +3254,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3105,7 +3356,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3203,7 +3465,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3297,7 +3570,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3384,7 +3668,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3475,7 +3770,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */
@@ -3510,7 +3816,7 @@ export interface operations {
     getReferences: {
         parameters: {
             query: {
-                /** @description Comma-separated entity IDs to check references for (max 10) */
+                /** @description Comma-separated entity IDs to check references for (max 20) */
                 id: string;
             };
             header?: never;
@@ -3550,7 +3856,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "application/json": components["schemas"]["UnauthorizedError"];
+                };
+            };
+            /** @description Forbidden — the token is valid but may not be used here. Either the account is not entitled to API access (no active Premium subscription, or API access not enabled; JSON body with a `code`), or the token belongs to the other app: tokens carry the flavor of the login that minted them, and may only be used on that flavor's endpoints (a Wallet token on /wallet/..., a Board token on /board/...; plain-text body). Re-authenticating will not help. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementError"];
+                    /** @example Forbidden: this token belongs to the Board app and cannot be used on the wallet surface. Use the board endpoints, or authenticate against wallet. */
+                    "text/plain": string;
                 };
             };
             /** @description Rate limit exceeded. Check `Retry-After` header for when to retry. */

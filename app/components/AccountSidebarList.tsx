@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Calendar03Icon,
   ChevronRightIcon,
   LayoutListIcon,
   SparklesIcon,
@@ -25,6 +26,7 @@ import type { Account } from "../actions";
 import { getAccountIcon } from "@/lib/utils";
 import { useDashboard } from "./DashboardProvider";
 import { SettingsPopover } from "./AccountRecordsView";
+import { ManageDataModal } from "./ManageDataModal";
 
 function fmt(amount: number | undefined, currency: string | undefined) {
   if (amount == null || !currency) return "—";
@@ -96,6 +98,14 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                   <Link href="/insights">
                     <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
                     <span className="font-medium">Insights</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem className="before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-sidebar-border">
+                <SidebarMenuButton asChild isActive={pathname === "/planned"} size="lg" className="rounded-none px-3">
+                  <Link href="/planned">
+                    <HugeiconsIcon icon={Calendar03Icon} className="size-4 shrink-0" />
+                    <span className="font-medium">Planned Payments</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -197,14 +207,17 @@ export function AccountSidebarList() {
     <Sidebar collapsible="none" className="h-full w-full">
       <div className="flex items-center justify-between pl-6 pr-4 pt-2 shrink-0">
         <span className="font-display text-xl font-bold text-sidebar-primary">Wallet</span>
-        <SettingsPopover
-          token={token}
-          stats={stats}
-          period={period}
-          setPeriod={setPeriod}
-          onSave={handleSave}
-          onDisconnect={handleDisconnect}
-        />
+        <div className="flex items-center">
+          <ManageDataModal />
+          <SettingsPopover
+            token={token}
+            stats={stats}
+            period={period}
+            setPeriod={setPeriod}
+            onSave={handleSave}
+            onDisconnect={handleDisconnect}
+          />
+        </div>
       </div>
       {content}
     </Sidebar>

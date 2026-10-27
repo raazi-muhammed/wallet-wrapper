@@ -18,7 +18,40 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Fonts
+
+Fonts are loaded with [`next/font/google`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) in `app/layout.tsx` and exposed as Tailwind v4 theme tokens in `app/globals.css`.
+
+| Role | Font | Tailwind class | Notes |
+| --- | --- | --- | --- |
+| Sans / body | [Inter](https://fonts.google.com/specimen/Inter) | `font-sans` | Default on `<body>` |
+| Mono | [Fira Code](https://fonts.google.com/specimen/Fira+Code) | `font-mono` | |
+| Display | [Mona Sans](https://fonts.google.com/specimen/Mona+Sans) | `font-display` | Width 125 (Expanded) via the `wdth` axis |
+
+Mona Sans is a variable font (`wdth` 75–125, `wght` 200–900). The `wdth` axis is loaded explicitly and pinned to 125 with `font-variation-settings`, not `font-stretch`.
+
+```tsx
+// app/layout.tsx
+import { Inter, Fira_Code, Mona_Sans } from "next/font/google";
+
+const fontDisplay = Mona_Sans({
+  variable: "--font-mona",
+  subsets: ["latin"],
+  axes: ["wdth"],
+});
+
+// <html className={`${inter.variable} ${firaCode.variable} ${fontDisplay.variable}`}>
+```
+
+```css
+/* app/globals.css */
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-fira-code);
+  --font-display: var(--font-mona);
+  --font-display--font-variation-settings: "wdth" 125;
+}
+```
 
 ## Learn More
 

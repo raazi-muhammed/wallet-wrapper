@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -11,11 +11,17 @@ import {
   ArrowLeft01Icon,
   Settings01Icon,
   Tick02Icon,
+  PencilEdit02Icon,
+  CheckListIcon,
 } from "@hugeicons/core-free-icons";
-import { fetchAccounts, fetchRecords } from "../actions";
+import { fetchAccounts, fetchRecords, patchRecords } from "../actions";
 import type { Account, WalletRecord, ApiStats } from "../actions";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
-import { AddRecordButton, RecordDetailModal, DuplicateRecordModal } from "./AddRecordModal";
+import { AddRecordButton, RecordDetailModal, DuplicateRecordModal, EditRecordModal, RECORD_STATES } from "./AddRecordModal";
+import { BulkActionBar } from "./RecordBulkActions";
+import { AccountEditModal } from "./AccountEditModal";
+import { LabelChip, unwrap } from "./EditControls";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -277,7 +283,7 @@ export function SettingsPopover({
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-const ICON_BG_COLORS = [
+export const ICON_BG_COLORS = [
   "bg-pink-500/20 text-pink-400",
   "bg-violet-500/20 text-violet-400",
   "bg-emerald-500/20 text-emerald-400",
@@ -288,7 +294,7 @@ const ICON_BG_COLORS = [
   "bg-indigo-500/20 text-indigo-400",
 ];
 
-function hashStr(s: string) {
+export function hashStr(s: string) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   return Math.abs(h);
@@ -304,7 +310,71 @@ function groupByDate(records: WalletRecord[]) {
   return Array.from(map.entries()).map(([date, recs]) => ({ date, records: recs }));
 }
 
-function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: WalletRecord[]; accounts: Account[]; highlightedId?: string; onEdit?: (r: WalletRecord) => void }) {
+// The badge on a record's icon doubles as a quick status picker.
+function StatusBadge({ record }: { record: WalletRecord }) {
+  const { token, invalidateAll } = useDashboard();
+  const [open, setOpen] = useState(false);
+  const { mutate: setState, isPending, error } = useMutation({
+    mutationFn: async (state: (typeof RECORD_STATES)[number]["id"]) =>
+      unwrap(await patchRecords(token, [{ id: record.id, recordState: state }])),
+    onSuccess: () => { setOpen(false); invalidateAll(); },
+  });
+
+  const state = record.recordState;
+  // Paired transfers share their status with the mirror record, so the API locks it.
+  const locked = !!record.transfer?.paired;
+  const badgeClass =
+    state === "reconciled" ? "bg-accent" :
+    state === "cleared" ? "bg-success" :
+    "bg-card border border-muted/60";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          disabled={locked}
+          title={locked ? "Status of paired transfers can't be changed" : `Status: ${state ?? "unknown"}`}
+          aria-label="Change status"
+          className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full flex items-center justify-center ${badgeClass} ${locked ? "" : "hover:scale-125 transition-transform"}`}
+        >
+          {(state === "cleared" || state === "reconciled") && (
+            <svg viewBox="0 0 10 10" className="size-2 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-1 bg-card border-0" align="start" onClick={(e) => e.stopPropagation()}>
+        {RECORD_STATES.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            disabled={isPending}
+            onClick={() => s.id !== state && setState(s.id)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md text-left hover:bg-default transition-colors ${s.id === state ? "font-semibold text-accent" : "text-foreground"}`}
+          >
+            {s.label}
+            {s.id === state && <HugeiconsIcon icon={Tick02Icon} className="size-3.5" />}
+          </button>
+        ))}
+        {error && <p className="px-3 py-1.5 text-xs text-danger">{error.message}</p>}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function RecordsTable({ records, accounts, highlightedId, onEdit, selectedIds, onToggleSelect }: {
+  records: WalletRecord[];
+  accounts: Account[];
+  highlightedId?: string;
+  onEdit?: (r: WalletRecord) => void;
+  /** Set while selecting records for a bulk action; rows then toggle selection instead of opening. */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (r: WalletRecord) => void;
+}) {
+  const selecting = !!selectedIds;
   if (records.length === 0) {
     return <p className="text-center py-12 text-muted text-sm">No records found.</p>;
   }
@@ -337,26 +407,30 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
               const account = accounts.find((a) => a.id === r.accountId);
               const accountIcon = getAccountIcon(account?.accountType ?? "", r.accountName);
               const accountColor = account?.color ?? "var(--muted-foreground)";
-              const cleared = r.recordState === "cleared" || r.recordState === "reconciled";
+              const isSelected = selectedIds?.has(r.id) ?? false;
 
               return (
                 <div
                   key={r.id}
                   data-record-id={r.id}
-                  onClick={() => onEdit?.(r)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
+                  onClick={() => (selecting ? onToggleSelect?.(r) : onEdit?.(r))}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${isSelected ? "bg-accent/10" : rowIndex % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""} ${highlighted ? "outline outline-2 outline-accent" : ""}`}
                 >
+                  {selecting && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleSelect?.(r)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Select record"
+                      className="size-4 shrink-0 accent-primary"
+                    />
+                  )}
                   <div className="relative shrink-0">
                     <div className={`size-9 rounded-full flex items-center justify-center ${iconColor}`}>
                       <HugeiconsIcon icon={categoryIcon} className="size-4" />
                     </div>
-                    {cleared && (
-                      <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-success flex items-center justify-center">
-                        <svg viewBox="0 0 10 10" className="size-2 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    )}
+                    {!selecting && <StatusBadge record={r} />}
                   </div>
 
                   <div className="min-w-0 flex-1 sm:w-40 sm:flex-none">
@@ -372,8 +446,10 @@ function RecordsTable({ records, accounts, highlightedId, onEdit }: { records: W
                     <span className="text-sm text-muted truncate">{r.accountName}</span>
                   </div>
 
-                  <div className="hidden md:block flex-1 min-w-0">
-                    <span className="text-sm text-muted truncate block">{r.note ?? ""}</span>
+                  <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
+                    <span className="text-sm text-muted truncate">{r.note ?? ""}</span>
+                    {r.labels.slice(0, 2).map((l) => <LabelChip key={l.id} label={l} />)}
+                    {r.labels.length > 2 && <span className="text-xs text-muted shrink-0">+{r.labels.length - 2}</span>}
                   </div>
 
                   <div className="shrink-0 text-right">
@@ -440,8 +516,20 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
   const router = useRouter();
   const { token, period, searchInput, setSearchInput, debouncedSearch, handleSave, invalidateAll } = useDashboard();
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
+  // `viewingRecord` drives the read-only detail modal; `editingRecord` the edit form opened from it.
+  const [viewingRecord, setViewingRecord] = useState<WalletRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<WalletRecord | null>(null);
   const [duplicatingRecord, setDuplicatingRecord] = useState<WalletRecord | null>(null);
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
+
+  function toggleSelected(r: WalletRecord) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+      return next;
+    });
+  }
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["accounts", token],
@@ -520,10 +608,12 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
     [...list].sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
   const displayedRecords = sorted(isSearching ? searchResults : records);
   const activeAccounts = accounts.filter((a) => !a.archived);
+  const currentAccount = accountId === undefined ? undefined : accounts.find((a) => a.id === accountId);
   const selectedAccountName =
     accountId === undefined
       ? "All Accounts"
-      : activeAccounts.find((a) => a.id === accountId)?.name ?? "Records";
+      : currentAccount?.name ?? "Records";
+  const selectedRecords = selectedIds ? displayedRecords.filter((r) => selectedIds.has(r.id)) : [];
 
   const initialLoading = !!token && (accountsLoading || recordsInitialLoading) && activeAccounts.length === 0;
   const recordsLoading = recordsFetching && !isFetchingNextPage;
@@ -568,6 +658,16 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
               <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
             </button>
             {selectedAccountName}
+            {currentAccount && (
+              <button
+                onClick={() => setEditingAccount(true)}
+                aria-label="Edit account"
+                title="Edit account"
+                className="flex items-center justify-center size-6 rounded-full text-muted hover:text-foreground hover:bg-default transition-colors shrink-0"
+              >
+                <HugeiconsIcon icon={PencilEdit02Icon} className="size-3.5" />
+              </button>
+            )}
           </h2>
           {isSearching && (
             <p className="text-xs text-muted mt-0.5">
@@ -576,6 +676,14 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <Button
+            variant={selectedIds ? "secondary" : "ghost"}
+            onClick={() => setSelectedIds(selectedIds ? null : new Set())}
+            aria-pressed={!!selectedIds}
+          >
+            <HugeiconsIcon icon={CheckListIcon} className="size-4" />
+            Select
+          </Button>
           {token && (
             <AddRecordButton
               token={token}
@@ -584,7 +692,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
               defaultAccountId={accountId}
               onSuccess={invalidateAll}
               onGoToRecord={handleGoToRecord}
-              onOpenRecord={setEditingRecord}
+              onOpenRecord={setViewingRecord}
             />
           )}
         </div>
@@ -614,7 +722,20 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           records={displayedRecords}
           accounts={accounts}
           highlightedId={highlightedId}
-          onEdit={setEditingRecord}
+          onEdit={setViewingRecord}
+          selectedIds={selectedIds ?? undefined}
+          onToggleSelect={toggleSelected}
+        />
+      )}
+
+      {selectedIds && (
+        <BulkActionBar
+          token={token}
+          selected={selectedRecords}
+          accounts={accounts}
+          onSelectAll={() => setSelectedIds(new Set(displayedRecords.map((r) => r.id)))}
+          onClear={() => setSelectedIds(null)}
+          onDone={() => { setSelectedIds(new Set()); invalidateAll(); }}
         />
       )}
 
@@ -636,13 +757,35 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
         </p>
       )}
 
-      {editingRecord && (
+      {viewingRecord && (
         <RecordDetailModal
-          record={editingRecord}
+          record={viewingRecord}
+          token={token}
           accounts={activeAccounts}
+          isOpen={!!viewingRecord}
+          onClose={() => setViewingRecord(null)}
+          onDuplicate={() => { setDuplicatingRecord(viewingRecord); setViewingRecord(null); }}
+          onEdit={() => { setEditingRecord(viewingRecord); setViewingRecord(null); }}
+          onDeleted={invalidateAll}
+        />
+      )}
+      {editingRecord && (
+        <EditRecordModal
+          record={editingRecord}
+          token={token}
+          accounts={accounts.filter((a) => !a.archived || a.id === editingRecord.accountId)}
+          records={allRecords}
           isOpen={!!editingRecord}
           onClose={() => setEditingRecord(null)}
-          onDuplicate={() => { setDuplicatingRecord(editingRecord); setEditingRecord(null); }}
+          onSuccess={invalidateAll}
+          onOpenRecord={setViewingRecord}
+        />
+      )}
+      {currentAccount && editingAccount && (
+        <AccountEditModal
+          account={currentAccount}
+          isOpen={editingAccount}
+          onClose={() => setEditingAccount(false)}
         />
       )}
       {duplicatingRecord && (
@@ -655,7 +798,7 @@ export function AccountRecordsView({ accountId }: { accountId?: string }) {
           onClose={() => setDuplicatingRecord(null)}
           onSuccess={() => { setDuplicatingRecord(null); invalidateAll(); }}
           onGoToRecord={(id) => { setDuplicatingRecord(null); handleGoToRecord(id); }}
-          onOpenRecord={(rec) => { setDuplicatingRecord(null); setEditingRecord(rec); }}
+          onOpenRecord={(rec) => { setDuplicatingRecord(null); setViewingRecord(rec); }}
         />
       )}
     </div>

@@ -22,23 +22,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchCategories, fetchRecords, createRecords, patchRecord } from "../actions";
+import { fetchRecords, createRecords, patchRecords, deleteRecords } from "../actions";
 import type { Account, Category, WalletRecord } from "../actions";
+import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
+import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
+import { ErrorBox, LabelChip, LabelSelect, ToggleRow, unwrap } from "./EditControls";
 
 type RecordType = "expense" | "income" | "transfer";
+type EditableState = "cleared" | "uncleared" | "reconciled";
+type ClearableField = NonNullable<PatchRecordItem["$clear"]>[number];
 
-
-const PAYMENT_TYPES: { id: string; label: string }[] = [
-  { id: "cash", label: "Cash" },
-  { id: "debit_card", label: "Debit Card" },
-  { id: "credit_card", label: "Credit Card" },
-  { id: "transfer", label: "Transfer" },
-  { id: "voucher", label: "Voucher" },
-  { id: "mobile_payment", label: "Mobile Payment" },
-  { id: "web_payment", label: "Web Payment" },
-];
-const RECORD_STATES: { id: string; label: string }[] = [
+export const RECORD_STATES: { id: EditableState; label: string }[] = [
   { id: "cleared", label: "Cleared" },
   { id: "uncleared", label: "Uncleared" },
   { id: "reconciled", label: "Reconciled" },
@@ -103,13 +98,23 @@ export function AddRecordButton({ token, accounts, records, defaultAccountId, on
 
 // ── Record Detail Modal ───────────────────────────────────────────────────────
 
-export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplicate }: {
+export function RecordDetailModal({ record, token, accounts, isOpen, onClose, onDuplicate, onEdit, onDeleted }: {
   record: WalletRecord;
+  token: string;
   accounts: Account[];
   isOpen: boolean;
   onClose: () => void;
   onDuplicate?: () => void;
+  onEdit?: () => void;
+  onDeleted?: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const { mutate: runDelete, isPending: deleting, error: deleteError } = useMutation({
+    // Paired transfers can only be deleted together with their mirror record.
+    mutationFn: async () => unwrap(await deleteRecords(token, [recordDeleteGroup(record)])),
+    onSuccess: () => { onClose(); onDeleted?.(); },
+  });
+
   const account = accounts.find((a) => a.id === record.accountId);
   const accountIcon = getAccountIcon(account?.accountType ?? "", record.accountName);
   const accountColor = account?.color ?? "var(--muted-foreground)";
@@ -119,7 +124,6 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
   const recordType = record.recordType?.toLowerCase();
   const typeLabel = recordType === "income" ? "Income" : recordType === "transfer" ? "Transfer" : "Expense";
 
-  const paymentLabel = PAYMENT_TYPES.find((p) => p.id === record.paymentType)?.label ?? record.paymentType;
   const stateLabel = RECORD_STATES.find((s) => s.id === record.recordState)?.label ?? record.recordState ?? "—";
 
   const date = record.recordDate ? new Date(record.recordDate) : null;
@@ -166,10 +170,6 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
           <span className="text-sm">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</span>
         </DetailRow>
 
-        <DetailRow label="Payment">
-          <span className="text-sm">{paymentLabel}</span>
-        </DetailRow>
-
         <DetailRow label="Status">
           <span className="text-sm">{stateLabel}</span>
         </DetailRow>
@@ -185,18 +185,50 @@ export function RecordDetailModal({ record, accounts, isOpen, onClose, onDuplica
             <span className="text-sm text-muted">{record.note}</span>
           </DetailRow>
         )}
+
+        {record.labels.length > 0 && (
+          <DetailRow label="Labels">
+            <div className="flex flex-wrap gap-1">
+              {record.labels.map((l) => <LabelChip key={l.id} label={l} />)}
+            </div>
+          </DetailRow>
+        )}
+
+        {(record.place?.name || record.place?.address) && (
+          <DetailRow label="Place">
+            <span className="text-sm">{record.place.name}</span>
+            {record.place.address && <span className="block text-xs text-muted">{record.place.address}</span>}
+          </DetailRow>
+        )}
       </div>
 
-      {onDuplicate && (
-        <div className="pb-5">
-          <button
-            onClick={() => { onClose(); onDuplicate(); }}
-            className="w-full py-2 rounded-lg border border-border text-sm font-medium text-muted hover:text-foreground hover:border-foreground/30 transition-colors"
-          >
-            Duplicate record
-          </button>
+      <div className="pb-5 space-y-2">
+        <ErrorBox error={deleteError} />
+        <div className="grid grid-cols-2 gap-2">
+          {onEdit && (
+            <Button onClick={() => { onClose(); onEdit(); }} className={onDuplicate ? "" : "col-span-2"}>
+              Edit
+            </Button>
+          )}
+          {onDuplicate && (
+            <Button variant="card" onClick={() => { onClose(); onDuplicate(); }} className={onEdit ? "" : "col-span-2"}>
+              Duplicate
+            </Button>
+          )}
         </div>
-      )}
+        {confirmingDelete ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={deleting}>Keep</Button>
+            <Button variant="destructive" onClick={() => runDelete()} disabled={deleting}>
+              {deleting ? "Deleting…" : record.transfer?.paired ? "Delete both legs" : "Confirm delete"}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="ghost" className="w-full text-danger hover:text-danger" onClick={() => setConfirmingDelete(true)}>
+            Delete record
+          </Button>
+        )}
+      </div>
     </ModalTemplate>
   );
 }
@@ -236,6 +268,39 @@ export function DuplicateRecordModal({ record, token, accounts, records, isOpen,
   );
 }
 
+export function EditRecordModal({ record, token, accounts, records, isOpen, onClose, onSuccess, onOpenRecord }: {
+  record: WalletRecord;
+  token: string;
+  accounts: Account[];
+  records: WalletRecord[];
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  onOpenRecord: (record: WalletRecord) => void;
+}) {
+  return (
+    <ModalTemplate
+      open={isOpen}
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      title="Edit record"
+      className="max-w-[720px] max-h-[90vh] flex flex-col gap-0"
+      bodyClassName="flex flex-col flex-1 min-h-0 p-0"
+    >
+      <RecordForm
+        mode="edit"
+        initialRecord={record}
+        token={token}
+        accounts={accounts}
+        records={records}
+        onSuccess={() => { onClose(); onSuccess(); }}
+        onCancel={onClose}
+        onGoToRecord={onClose}
+        onOpenRecord={(rec) => { onClose(); onOpenRecord(rec); }}
+      />
+    </ModalTemplate>
+  );
+}
+
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-4">
@@ -247,16 +312,18 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 
 // ── Account Select ────────────────────────────────────────────────────────────
 
-function AccountSelect({
+export function AccountSelect({
   accounts,
   value,
   onChange,
   placeholder = "Select account",
+  disabled,
 }: {
   accounts: Account[];
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -278,7 +345,8 @@ function AccountSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent"
+          disabled={disabled}
+          className="w-full h-10 flex items-center justify-between gap-2 rounded-lg border-0 bg-card px-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-60"
         >
           {selected ? (
             <span className="flex items-center gap-2 min-w-0">
@@ -331,7 +399,7 @@ function AccountSelect({
 
 // ── Category Select ───────────────────────────────────────────────────────────
 
-function CategorySelect({
+export function CategorySelect({
   categories,
   value,
   onChange,
@@ -466,6 +534,74 @@ function CategorySelect({
   );
 }
 
+/** The ids to delete for a record: a paired transfer goes together with its mirror. */
+export function recordDeleteGroup(record: WalletRecord) {
+  return record.transfer?.mirrorId ? [record.id, record.transfer.mirrorId] : [record.id];
+}
+
+// ── Edit patch ────────────────────────────────────────────────────────────────
+
+/**
+ * Builds a PATCH item holding only the fields that changed, so an untouched
+ * amount doesn't reset the record's currency and locked fields are never sent.
+ * Emptied fields go through `$clear`, since omitting a field means "no change".
+ * Returns null when nothing changed.
+ */
+function buildRecordPatch(original: WalletRecord, next: {
+  signedAmount: number;
+  accountId: string;
+  categoryId: string;
+  note: string;
+  payer: string;
+  recordDate: Date;
+  recordState: EditableState;
+  labelIds: string[];
+  place: PatchRecordItem["place"];
+  lockAmountDateState: boolean;
+  unlinkTransfer: boolean;
+}): PatchRecordItem | null {
+  const patch: PatchRecordItem = { id: original.id };
+  const clear: ClearableField[] = [];
+
+  if (!next.lockAmountDateState) {
+    if (next.signedAmount !== original.amount.value) patch.amount = { value: next.signedAmount };
+    if (next.recordDate.getTime() !== new Date(original.recordDate).getTime()) patch.recordDate = next.recordDate.toISOString();
+    // States outside the editable three (e.g. "void") show as "cleared" in the form; only send a real change.
+    const shownState = RECORD_STATES.some((s) => s.id === original.recordState) ? original.recordState : "cleared";
+    if (next.recordState !== shownState) patch.recordState = next.recordState;
+  }
+  if (next.accountId !== original.accountId) patch.accountId = next.accountId;
+
+  if (next.categoryId !== (original.category?.id ?? "")) {
+    if (next.categoryId) patch.categoryId = next.categoryId; else clear.push("categoryId");
+  }
+  if (next.note !== (original.note ?? "")) {
+    if (next.note) patch.note = next.note; else clear.push("note");
+  }
+  if (next.payer !== (original.counterParty ?? "")) {
+    if (next.payer) patch.counterParty = next.payer; else clear.push("counterParty");
+  }
+
+  const before = original.labels.map((l) => l.id);
+  const add = next.labelIds.filter((id) => !before.includes(id));
+  const remove = before.filter((id) => !next.labelIds.includes(id));
+  if (next.labelIds.length === 0 && before.length > 0) clear.push("labelIds");
+  else if (add.length > 0 || remove.length > 0) {
+    patch.labelIds = { ...(add.length > 0 ? { add } : {}), ...(remove.length > 0 ? { remove } : {}) };
+  }
+
+  const hadPlace = !!(original.place?.name || original.place?.address);
+  if (!next.place && hadPlace) clear.push("place");
+  else if (next.place && (next.place.name !== original.place?.name || next.place.address !== original.place?.address)) {
+    patch.place = next.place;
+  }
+
+  if (next.unlinkTransfer) clear.push("transfer");
+  if (clear.length > 0) patch.$clear = clear;
+
+  return Object.keys(patch).length > 1 ? patch : null;
+}
+
 // ── Shared Form ───────────────────────────────────────────────────────────────
 
 function RecordForm({
@@ -497,6 +633,12 @@ function RecordForm({
     return "expense";
   };
 
+  const isEdit = mode === "edit" && !!initialRecord;
+  // Paired transfers have a mirror on another account; the API locks their amount, date and state.
+  const pairedTransfer = isEdit && !!initialRecord.transfer?.paired;
+  const isTransferRecord = isEdit && !!initialRecord.transfer;
+  const initialState: EditableState = (RECORD_STATES.some((s) => s.id === initialRecord?.recordState) ? initialRecord?.recordState : "cleared") as EditableState;
+
   const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
   const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? "");
@@ -504,9 +646,12 @@ function RecordForm({
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
   const [note, setNote] = useState(() => initialRecord?.note ?? "");
   const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
-  const [paymentType, setPaymentType] = useState<"cash" | "debit_card" | "credit_card" | "transfer" | "voucher" | "mobile_payment" | "web_payment">(() => (initialRecord?.paymentType as never) ?? "cash");
-  const [recordState, setRecordState] = useState<"cleared" | "uncleared" | "reconciled">(() => (initialRecord?.recordState as never) ?? "cleared");
-  const [recordDate, setRecordDate] = useState<Date>(() => new Date());
+  const [recordState, setRecordState] = useState<EditableState>(initialState);
+  const [recordDate, setRecordDate] = useState<Date>(() => isEdit ? new Date(initialRecord.recordDate) : new Date());
+  const [labelIds, setLabelIds] = useState<string[]>(() => initialRecord?.labels.map((l) => l.id) ?? []);
+  const [placeName, setPlaceName] = useState(() => initialRecord?.place?.name ?? "");
+  const [placeAddress, setPlaceAddress] = useState(() => initialRecord?.place?.address ?? "");
+  const [unlinkTransfer, setUnlinkTransfer] = useState(false);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [debouncedNote, setDebouncedNote] = useState(note);
@@ -519,6 +664,13 @@ function RecordForm({
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const currencyCode = selectedAccount?.balance.currencyCode ?? initialRecord?.amount.currencyCode ?? "INR";
 
+  // A record can only move between non-bank-synced accounts that share its account's currency.
+  const originalAccount = isEdit ? accounts.find((a) => a.id === initialRecord.accountId) : undefined;
+  const accountLocked = isEdit && initialRecord.accountIsBankSync;
+  const accountOptions = isEdit
+    ? accounts.filter((a) => a.id === initialRecord.accountId || (!a.isBankSync && a.balance.currencyCode === originalAccount?.balance.currencyCode))
+    : accounts;
+
   // Debounce note for suggestions query
   useEffect(() => {
     const t = setTimeout(() => setDebouncedNote(note), 300);
@@ -530,12 +682,9 @@ function RecordForm({
     return () => clearTimeout(t);
   }, [payer]);
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ["categories", token],
-    queryFn: () => fetchCategories(token),
-    enabled: !!token,
-    staleTime: 5 * 60_000,
-  });
+  const { data: categories = [] } = useCategories(token);
+  const { data: labels = [] } = useLabels(token);
+  const createLabel = useCreateLabel(token, (id) => setLabelIds((ids) => [...ids, id]));
 
   const { data: apiSuggestions = [] } = useQuery({
     queryKey: ["noteSuggestions", token, debouncedNote],
@@ -606,12 +755,10 @@ function RecordForm({
     if (!accountId) setAccountId(r.accountId);
     if (r.category?.id) setCategoryId(r.category.id);
     const rt = deriveType(r);
-    setRecordType(rt);
-    setPaymentType(r.paymentType ?? "cash");
-    const editableStates = ["cleared", "uncleared", "reconciled"] as const;
-    if (r.recordState && (editableStates as readonly string[]).includes(r.recordState)) {
-      setRecordState(r.recordState as typeof editableStates[number]);
-    }
+    if (!isEdit || rt !== "transfer") setRecordType(rt);
+    const state = RECORD_STATES.find((s) => s.id === r.recordState);
+    if (state) setRecordState(state.id);
+    if (r.labels.length > 0) setLabelIds(r.labels.map((l) => l.id));
     setShowSuggestions(false);
   }
 
@@ -647,42 +794,54 @@ function RecordForm({
   const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
     mutationFn: async (addAnother: boolean | "sameDate") => {
       if (amount === undefined || !accountId) throw new Error("Missing required fields");
+      if (amount === 0) throw new Error("Amount must not be zero");
+
+      const place = placeName.trim() || placeAddress.trim()
+        ? { ...initialRecord?.place, name: placeName.trim() || undefined, address: placeAddress.trim() || undefined }
+        : undefined;
+
+      if (isEdit) {
+        const patch = buildRecordPatch(initialRecord, {
+          signedAmount: isTransferRecord
+            ? Math.sign(initialRecord.amount.value) * Math.abs(amount)
+            : recordType === "expense" ? -Math.abs(amount) : Math.abs(amount),
+          accountId, categoryId, note, payer, recordDate, recordState, labelIds, place,
+          lockAmountDateState: pairedTransfer,
+          unlinkTransfer,
+        });
+        if (patch) unwrap(await patchRecords(token, [patch]));
+        return addAnother;
+      }
 
       const base = {
         note: note || undefined,
         counterParty: payer || undefined,
         recordDate: recordDate.toISOString(),
-        paymentType,
         recordState,
         ...(categoryId ? { categoryId } : {}),
-      };
+        ...(labelIds.length > 0 ? { labelIds } : {}),
+        ...(place ? { place } : {}),
+      } satisfies Partial<CreateRecordRequest>;
 
-      if (mode === "edit" && initialRecord) {
-        const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        await patchRecord(token, initialRecord.id, {
-          ...base,
-          accountId,
-          amount: { value: signedAmount, currencyCode },
-        });
-      } else if (recordType === "transfer" && toAccountId) {
-        await createRecords(token, [
-          { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode } },
-          { ...base, accountId: toAccountId, amount: { value: Math.abs(amount), currencyCode } },
-        ]);
+      if (recordType === "transfer" && toAccountId) {
+        // One record plus `pairingMode: "new"` makes the API create the linked mirror on the target account.
+        unwrap(await createRecords(token, [
+          { ...base, accountId, amount: { value: -Math.abs(amount), currencyCode }, transfer: { pairingMode: "new", accountId: toAccountId } },
+        ]));
       } else {
         const signedAmount = recordType === "expense" ? -Math.abs(amount) : Math.abs(amount);
-        await createRecords(token, [
+        unwrap(await createRecords(token, [
           { ...base, accountId, amount: { value: signedAmount, currencyCode } },
-        ]);
+        ]));
       }
 
       return addAnother;
     },
     onSuccess: (addAnother) => {
       if (addAnother === "sameDate") {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
       } else if (addAnother) {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId("");
+        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
         setRecordDate(new Date());
       } else {
         onSuccess();
@@ -704,27 +863,46 @@ function RecordForm({
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column */}
           <div className="flex-1 space-y-4">
-            <Tabs value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
-              <TabsList className="bg-card w-full">
-                <TabsTrigger
-                  value="expense"
-                  className="flex-1 data-[state=active]:bg-danger data-[state=active]:text-white"
-                >
-                  Expense
-                </TabsTrigger>
-                <TabsTrigger
-                  value="income"
-                  className="flex-1 data-[state=active]:bg-success data-[state=active]:text-white"
-                >
-                  Income
-                </TabsTrigger>
-                <TabsTrigger value="transfer" className="flex-1">
-                  Transfer
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {isTransferRecord ? (
+              <div className="space-y-2">
+                <p className="rounded-lg bg-card px-3 py-2.5 text-sm text-muted">
+                  {pairedTransfer
+                    ? "Paired transfer: the amount, date and status are locked because a linked record exists on another account."
+                    : "Unpaired transfer"}
+                </p>
+                <ToggleRow
+                  label="Remove transfer link"
+                  description="Turns this into a regular record and sets its category to Unknown"
+                  checked={unlinkTransfer}
+                  onChange={setUnlinkTransfer}
+                />
+              </div>
+            ) : (
+              <Tabs value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
+                <TabsList className="bg-card w-full">
+                  <TabsTrigger
+                    value="expense"
+                    className="flex-1 data-[state=active]:bg-danger data-[state=active]:text-white"
+                  >
+                    Expense
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="income"
+                    className="flex-1 data-[state=active]:bg-success data-[state=active]:text-white"
+                  >
+                    Income
+                  </TabsTrigger>
+                  {!isEdit && (
+                    <TabsTrigger value="transfer" className="flex-1">
+                      Transfer
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </Tabs>
+            )}
 
-            <div>
+            <fieldset disabled={pairedTransfer} className="min-w-0 disabled:opacity-60">
+
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">
                 Amount <span className="text-danger">*</span>
               </label>
@@ -759,14 +937,15 @@ function RecordForm({
                   {currencyCode}
                 </div>
               </div>
-            </div>
+            </fieldset>
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Account</label>
-              <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
+              <AccountSelect accounts={accountOptions} value={accountId} onChange={setAccountId} disabled={accountLocked} />
+              {accountLocked && <p className="text-xs text-muted mt-1 pl-3">Records on bank-synced accounts can&apos;t be moved.</p>}
             </div>
 
-            {recordType === "transfer" && (
+            {recordType === "transfer" && !isEdit && (
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">To Account</label>
                 <AccountSelect
@@ -785,7 +964,7 @@ function RecordForm({
               </div>
             )}
 
-            <div>
+            <fieldset disabled={pairedTransfer} className="min-w-0 disabled:opacity-60">
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Date &amp; Time</label>
               <DateTimePicker value={recordDate} onChange={setRecordDate} />
               <div className="flex gap-2 mt-2">
@@ -804,7 +983,7 @@ function RecordForm({
                   Yesterday
                 </button>
               </div>
-            </div>
+            </fieldset>
           </div>
 
           {/* Right column */}
@@ -814,6 +993,7 @@ function RecordForm({
               <Textarea
                 placeholder="Describe your record"
                 value={note}
+                maxLength={255}
                 onChange={(e) => { setNote(e.target.value); setShowSuggestions(true); }}
                 onFocus={() => note.trim() && setShowSuggestions(true)}
                 onBlur={handleNoteBlur}
@@ -859,6 +1039,7 @@ function RecordForm({
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payer</label>
               <Input
                 value={payer}
+                maxLength={255}
                 onChange={(e) => { setPayer(e.target.value); setShowPayerSuggestions(true); }}
                 onFocus={() => payer.trim() && setShowPayerSuggestions(true)}
                 onBlur={handlePayerBlur}
@@ -884,24 +1065,35 @@ function RecordForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment type</label>
-              <Select value={paymentType} onValueChange={(v) => setPaymentType(v as typeof paymentType)}>
-                <SelectTrigger className="w-full rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TYPES.map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="text-foreground focus:bg-default focus:text-foreground">
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Labels</label>
+              <LabelSelect labels={labels} value={labelIds} onChange={setLabelIds} onCreate={createLabel} />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Place</label>
+              <div className="space-y-2">
+                <Input
+                  value={placeName}
+                  onChange={(e) => setPlaceName(e.target.value)}
+                  maxLength={255}
+                  placeholder="Name"
+                  aria-label="Place name"
+                  className="text-foreground placeholder:text-muted rounded-lg"
+                />
+                <Input
+                  value={placeAddress}
+                  onChange={(e) => setPlaceAddress(e.target.value)}
+                  maxLength={255}
+                  placeholder="Address"
+                  aria-label="Place address"
+                  className="text-foreground placeholder:text-muted rounded-lg"
+                />
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1.5 pl-3">Payment status</label>
-              <Select value={recordState} onValueChange={(v) => setRecordState(v as typeof recordState)}>
+              <Select value={recordState} onValueChange={(v) => setRecordState(v as EditableState)} disabled={pairedTransfer}>
                 <SelectTrigger className="w-full rounded-lg">
                   <SelectValue />
                 </SelectTrigger>

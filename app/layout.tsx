@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Fira_Code } from "next/font/google";
+import { Inter, Fira_Code, Mona_Sans } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "./components/QueryProvider";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -14,6 +14,12 @@ const firaCode = Fira_Code({
   subsets: ["latin"],
 });
 
+const fontDisplay = Mona_Sans({
+  variable: "--font-mona",
+  subsets: ["latin"],
+  axes: ["wdth"],
+});
+
 export const metadata: Metadata = {
   title: "Wallet Dashboard",
   description: "BudgetBakers Wallet Dashboard",
@@ -25,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${firaCode.variable} h-full`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${firaCode.variable} ${fontDisplay.variable} h-full`}>
       <body className="min-h-full bg-background text-foreground font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <QueryProvider>{children}</QueryProvider>

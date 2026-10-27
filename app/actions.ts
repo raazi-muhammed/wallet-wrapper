@@ -13,7 +13,7 @@ import type {
   PatchBudgetItem,
   DeletableType,
 } from "@/lib/wallet-client";
-export type { Account, WalletRecord, Category, Label, Budget, ApiStats, WalletColor } from "@/lib/wallet-client";
+export type { Account, WalletRecord, Category, Label, Budget, StandingOrder, StandingOrderItem, ApiStats, WalletColor } from "@/lib/wallet-client";
 
 /** Result of a write action. Errors are returned, not thrown, so their text survives production builds. */
 export type WriteResult = { error: string | null };
@@ -95,6 +95,38 @@ export async function fetchLabels(token: string) {
 export async function fetchBudgets(token: string) {
   const { budgets } = await createWalletClient(token).getBudgets({ limit: 200 });
   return budgets;
+}
+
+export async function fetchStandingOrders(token: string) {
+  const client = createWalletClient(token);
+  const all: Awaited<ReturnType<typeof client.getStandingOrders>>["standingOrders"] = [];
+  let offset = 0;
+  while (true) {
+    const { standingOrders, nextOffset } = await client.getStandingOrders({ limit: 200, offset });
+    all.push(...standingOrders);
+    if (!nextOffset || standingOrders.length === 0) break;
+    offset = nextOffset;
+  }
+  return all;
+}
+
+/** Occurrences of every standing order whose original date is on or after `from` (ISO date), excluding dismissed ones. */
+export async function fetchStandingOrderItems(token: string, from: string) {
+  const client = createWalletClient(token);
+  const all: Awaited<ReturnType<typeof client.getStandingOrderItems>>["items"] = [];
+  let offset = 0;
+  while (true) {
+    const { items, nextOffset } = await client.getStandingOrderItems({
+      limit: 200,
+      offset,
+      dismissed: false,
+      originalDate: `gte.${from}`,
+    });
+    all.push(...items);
+    if (!nextOffset || items.length === 0) break;
+    offset = nextOffset;
+  }
+  return all;
 }
 
 export async function createRecords(token: string, records: CreateRecordRequest[]) {

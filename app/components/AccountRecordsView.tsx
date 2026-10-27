@@ -283,7 +283,7 @@ export function SettingsPopover({
 
 // ── Records Table ─────────────────────────────────────────────────────────────
 
-const ICON_BG_COLORS = [
+export const ICON_BG_COLORS = [
   "bg-pink-500/20 text-pink-400",
   "bg-violet-500/20 text-violet-400",
   "bg-emerald-500/20 text-emerald-400",
@@ -294,7 +294,7 @@ const ICON_BG_COLORS = [
   "bg-indigo-500/20 text-indigo-400",
 ];
 
-function hashStr(s: string) {
+export function hashStr(s: string) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   return Math.abs(h);

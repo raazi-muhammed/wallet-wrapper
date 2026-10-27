@@ -8,6 +8,8 @@ type RawRecord = components["schemas"]["Record"];
 type RawCategory = components["schemas"]["Category"];
 type RawLabel = components["schemas"]["Label"];
 type RawBudget = components["schemas"]["Budget"];
+type RawStandingOrder = components["schemas"]["StandingOrder"];
+type RawStandingOrderItem = components["schemas"]["StandingOrderItem"];
 export type CreateRecordRequest = components["schemas"]["CreateRecordRequest"];
 export type PatchRecordItem = components["schemas"]["PatchRecordItem"];
 export type PatchAccountItem = components["schemas"]["PatchAccountItem"];
@@ -24,6 +26,8 @@ type GetRecordsParams = operations["getRecords"]["parameters"]["query"];
 type GetCategoriesParams = operations["getCategories"]["parameters"]["query"];
 type GetLabelsParams = operations["getLabels"]["parameters"]["query"];
 type GetBudgetsParams = operations["getBudgets"]["parameters"]["query"];
+type GetStandingOrdersParams = operations["getStandingOrders"]["parameters"]["query"];
+type GetStandingOrderItemsParams = operations["getStandingOrderItems"]["parameters"]["query"];
 
 // ── Concrete app-level types ──────────────────────────────────────────────────
 // These narrow the generated optional fields to reflect what the API always returns.
@@ -110,6 +114,37 @@ export interface Budget {
   accountIds: string[];
   categoryIds: string[];
   labelIds: string[];
+}
+
+/** A recurring (planned) payment. */
+export interface StandingOrder {
+  id: string;
+  name: string;
+  type: "income" | "expense";
+  /** Always positive; the sign comes from `type`. */
+  amount: number;
+  currencyCode: string;
+  accountId?: string;
+  categoryId?: string;
+  counterParty?: string;
+  note?: string;
+  /** Next due date of the order. */
+  dueDate?: string;
+  /** RRULE string, e.g. "FREQ=MONTHLY;INTERVAL=1". */
+  recurrenceRule?: string;
+  manualPayment: boolean;
+  paymentCount: number;
+  labels: LabelRef[];
+}
+
+/** One occurrence (period) of a standing order. */
+export interface StandingOrderItem {
+  id: string;
+  standingOrderId: string;
+  originalDate: string;
+  paidDate?: string;
+  dismissed: boolean;
+  recordIds: string[];
 }
 
 export interface ApiStats {
@@ -217,6 +252,36 @@ function mapBudget(b: RawBudget): Budget {
   };
 }
 
+function mapStandingOrder(o: RawStandingOrder): StandingOrder {
+  return {
+    id: o.id!,
+    name: o.name ?? "",
+    type: o.type ?? "expense",
+    amount: Math.abs(o.amount ?? 0),
+    currencyCode: o.currencyCode ?? "USD",
+    accountId: o.accountId,
+    categoryId: o.categoryId,
+    counterParty: o.counterParty,
+    note: o.note,
+    dueDate: o.dueDate,
+    recurrenceRule: o.recurrenceRule,
+    manualPayment: o.manualPayment ?? false,
+    paymentCount: o.paymentCount ?? 0,
+    labels: (o.labels ?? []).map((l) => ({ id: l.id!, name: l.name!, color: l.color })),
+  };
+}
+
+function mapStandingOrderItem(i: RawStandingOrderItem): StandingOrderItem {
+  return {
+    id: i.id!,
+    standingOrderId: i.standingOrderId!,
+    originalDate: i.originalDate!,
+    paidDate: i.paidDate,
+    dismissed: i.dismissed ?? false,
+    recordIds: i.recordIds ?? [],
+  };
+}
+
 // ── Batch write results ───────────────────────────────────────────────────────
 // Every write endpoint answers with per-item results; a 400 means all items
 // failed but still carries the same body, so it is read rather than thrown.
@@ -290,6 +355,22 @@ export function createWalletClient(token: string) {
     async getBudgets(params?: GetBudgetsParams): Promise<{ budgets: Budget[] }> {
       const { data } = await http.get<{ budgets?: RawBudget[] }>("/budgets", { params });
       return { budgets: (data.budgets ?? []).map(mapBudget) };
+    },
+
+    async getStandingOrders(params?: GetStandingOrdersParams): Promise<{ standingOrders: StandingOrder[]; nextOffset?: number }> {
+      const { data } = await http.get<{ standingOrders?: RawStandingOrder[]; nextOffset?: number }>("/standing-orders", { params });
+      return {
+        standingOrders: (data.standingOrders ?? []).map(mapStandingOrder),
+        nextOffset: data.nextOffset,
+      };
+    },
+
+    async getStandingOrderItems(params?: GetStandingOrderItemsParams): Promise<{ items: StandingOrderItem[]; nextOffset?: number }> {
+      const { data } = await http.get<{ standingOrderItems?: RawStandingOrderItem[]; nextOffset?: number }>("/standing-orders/items", { params });
+      return {
+        items: (data.standingOrderItems ?? []).map(mapStandingOrderItem),
+        nextOffset: data.nextOffset,
+      };
     },
 
     createRecords(records: CreateRecordRequest[]) {

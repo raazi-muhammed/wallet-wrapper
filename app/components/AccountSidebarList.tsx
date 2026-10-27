@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Calendar03Icon,
   ChevronRightIcon,
   LayoutListIcon,
   SparklesIcon,
@@ -97,6 +98,14 @@ function SidebarBody({ accounts, pathname }: { accounts: Account[]; pathname: st
                   <Link href="/insights">
                     <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0" />
                     <span className="font-medium">Insights</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem className="before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-sidebar-border">
+                <SidebarMenuButton asChild isActive={pathname === "/planned"} size="lg" className="rounded-none px-3">
+                  <Link href="/planned">
+                    <HugeiconsIcon icon={Calendar03Icon} className="size-4 shrink-0" />
+                    <span className="font-medium">Planned Payments</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

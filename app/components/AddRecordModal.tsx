@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -754,6 +754,12 @@ function RecordForm({
     setRecordDate(d);
   }
 
+  function shiftDate(days: number) {
+    const d = new Date(recordDate);
+    d.setDate(d.getDate() + days);
+    setRecordDate(d);
+  }
+
   const { mutate: runSubmit, isPending: submitting, error: submitError, reset: resetSubmitError } = useMutation({
     mutationFn: async (addAnother: boolean | "sameDate") => {
       if (amount === undefined || !accountId) throw new Error("Missing required fields");
@@ -945,6 +951,24 @@ function RecordForm({
                 >
                   Yesterday
                 </button>
+                <div className="flex gap-1 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => shiftDate(-1)}
+                    aria-label="Previous day"
+                    className="p-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
+                  >
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => shiftDate(1)}
+                    aria-label="Next day"
+                    className="p-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
+                  >
+                    <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
+                  </button>
+                </div>
               </div>
             </fieldset>
           </div>

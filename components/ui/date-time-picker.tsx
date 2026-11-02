@@ -61,6 +61,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
           mode="single"
           selected={value}
           onSelect={handleDaySelect}
+          defaultMonth={value}
           captionLayout="dropdown"
           autoFocus
         />

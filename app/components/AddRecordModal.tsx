@@ -27,6 +27,7 @@ import { fetchRecords } from "@/lib/wallet-fetch";
 import type { Account, Category, WalletRecord } from "../actions";
 import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
+import { evaluateExpression } from "@/lib/calc";
 import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
 import { ErrorBox, LabelChip, LabelSelect, ToggleRow, unwrap } from "./EditControls";
 import { formatMoney } from "@/lib/format";
@@ -620,6 +621,12 @@ function RecordForm({
 
   const [recordType, setRecordType] = useState<RecordType>(() => prefill?.recordType ?? deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : prefill?.amount);
+  // What's typed in the amount field while editing (null shows `amount`). It
+  // can be a calculation such as "10 * 23"; the amount follows it whenever it
+  // evaluates, and leaving the field replaces it with the result.
+  const [amountExpr, setAmountExpr] = useState<string | null>(null);
+  const amountExprResult = amountExpr === null ? undefined : evaluateExpression(amountExpr);
+  const isCalculation = amountExpr !== null && /\d\s*[-+*/×÷(]|^\s*[-(]/.test(amountExpr);
   const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? prefill?.accountId ?? defaultAccountId ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? prefill?.categoryId ?? "");
@@ -824,9 +831,9 @@ function RecordForm({
     },
     onSuccess: (addAnother) => {
       if (addAnother === "sameDate") {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
+        setAmount(undefined); setAmountExpr(null); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
       } else if (addAnother) {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
+        setAmount(undefined); setAmountExpr(null); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
         setRecordDate(new Date());
       } else {
         onSuccess();
@@ -895,24 +902,33 @@ function RecordForm({
                 <div className="flex flex-1 rounded-lg border-0 bg-card overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setAmount((v) => Math.max(0, (v ?? 0) - 1))}
+                    onClick={() => { setAmountExpr(null); setAmount((v) => Math.max(0, (v ?? 0) - 1)); }}
                     className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
                   >
                     −
                   </button>
                   <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={amount ?? ""}
-                    onChange={(e) => setAmount(e.target.value === "" ? undefined : Number(e.target.value))}
+                    type="text"
+                    value={amountExpr ?? (amount ?? "")}
+                    onChange={(e) => {
+                      const text = e.target.value;
+                      setAmountExpr(text);
+                      if (text.trim() === "") { setAmount(undefined); return; }
+                      const result = evaluateExpression(text);
+                      if (result !== undefined) setAmount(Math.abs(result));
+                    }}
+                    onKeyDown={(e) => {
+                      // Enter applies a calculation instead of submitting the form.
+                      if (e.key === "Enter" && isCalculation) { e.preventDefault(); setAmountExpr(null); }
+                    }}
+                    onBlur={() => setAmountExpr(null)}
                     placeholder="0.00"
                     aria-label="Amount"
-                    className="flex-1 min-w-0 bg-transparent text-center text-foreground text-sm focus:outline-none px-2 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 min-w-0 bg-transparent text-center text-foreground text-sm focus:outline-none px-2 py-2"
                   />
                   <button
                     type="button"
-                    onClick={() => setAmount((v) => (v ?? 0) + 1)}
+                    onClick={() => { setAmountExpr(null); setAmount((v) => (v ?? 0) + 1); }}
                     className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
                   >
                     +
@@ -922,6 +938,12 @@ function RecordForm({
                   {currencyCode}
                 </div>
               </div>
+              {isCalculation && (
+                <p className={`text-xs mt-1 pl-3 tabular-nums ${amountExprResult === undefined ? "text-muted" : "text-foreground"}`}>
+                  {amountExprResult === undefined ? "Keep typing…" : `= ${amountExprResult}`}
+                  {amountExprResult !== undefined && amountExprResult < 0 && <span className="text-muted"> (saved as {Math.abs(amountExprResult)})</span>}
+                </p>
+              )}
             </fieldset>
 
             <div>

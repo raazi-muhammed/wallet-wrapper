@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -13,6 +15,10 @@ import { TokenConnectForm } from "./TokenConnectForm";
 import { useDashboard } from "./DashboardProvider";
 import { LabelChip } from "./EditControls";
 import { formatMoney } from "@/lib/format";
+import type { RecordPrefill } from "./AddRecordModal";
+
+// Only opened after a click, so the form code loads separately.
+const AddRecordModal = dynamic(() => import("./AddRecordModal").then((m) => m.AddRecordModal));
 
 // Unpaid occurrences older than this are treated as stale rather than overdue.
 const OVERDUE_LOOKBACK_DAYS = 90;
@@ -79,6 +85,7 @@ function PaymentRow({
   isLast,
   lookups,
   today,
+  onSelect,
 }: {
   order: StandingOrder;
   date?: string;
@@ -87,6 +94,7 @@ function PaymentRow({
   isLast: boolean;
   lookups: Lookups;
   today: Date;
+  onSelect: (order: StandingOrder, date?: string) => void;
 }) {
   const category = order.categoryId ? lookups.categories.get(order.categoryId) : undefined;
   const account = order.accountId ? lookups.accounts.get(order.accountId) : undefined;
@@ -99,7 +107,9 @@ function PaymentRow({
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 ${index % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""}`}
+      onClick={() => onSelect(order, date)}
+      title="Add a record for this payment"
+      className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors ${index % 2 === 1 ? "bg-card-2" : "bg-card"} ${isFirst ? "rounded-t-xl" : ""} ${isLast ? "rounded-b-xl" : ""}`}
     >
       <div className={`size-9 shrink-0 rounded-full flex items-center justify-center ${iconColor}`}>
         <HugeiconsIcon icon={categoryIcon} className="size-4" />
@@ -146,12 +156,14 @@ function Section({
   rows,
   lookups,
   today,
+  onSelect,
 }: {
   title: string;
   total?: string;
   rows: { key: string; order: StandingOrder; date?: string }[];
   lookups: Lookups;
   today: Date;
+  onSelect: (order: StandingOrder, date?: string) => void;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -171,6 +183,7 @@ function Section({
             isLast={i === rows.length - 1}
             lookups={lookups}
             today={today}
+            onSelect={onSelect}
           />
         ))}
       </div>
@@ -194,12 +207,39 @@ function PlannedPayments({
   orders,
   items,
   lookups,
+  session,
 }: {
   orders: StandingOrder[];
   items: StandingOrderItem[];
   lookups: Lookups;
+  session: string;
 }) {
   const router = useRouter();
+  const { invalidateRecords } = useDashboard();
+  const [prefill, setPrefill] = useState<RecordPrefill | null>(null);
+  const activeAccounts = [...lookups.accounts.values()].filter((a) => !a.archived);
+
+  // The API can't link a record to a planned payment, so this only fills the
+  // form in. A due date that has passed is kept; otherwise the record is
+  // dated now, when it's actually being paid.
+  function addRecordFor(order: StandingOrder, date?: string) {
+    const now = new Date();
+    let recordDate = now;
+    if (date && differenceInCalendarDays(parseISO(date), now) < 0) {
+      recordDate = parseISO(date);
+      recordDate.setHours(now.getHours(), now.getMinutes());
+    }
+    setPrefill({
+      recordType: order.type,
+      amount: order.amount,
+      accountId: order.accountId,
+      categoryId: order.categoryId,
+      note: order.note ?? order.name,
+      counterParty: order.counterParty,
+      labelIds: order.labels.map((l) => l.id),
+      recordDate,
+    });
+  }
   const today = startOfDay(new Date());
   const ordersById = new Map(orders.map((o) => [o.id, o]));
 
@@ -255,12 +295,24 @@ function PlannedPayments({
             <SummaryCard label="Overdue" value={overdue.length ? signedTotal(overdue) : "None"} tone={overdue.length ? "danger" : undefined} />
           </div>
 
-          <Section title="Overdue" total={signedTotal(overdue)} rows={overdue} lookups={lookups} today={today} />
-          <Section title="Next 7 days" total={signedTotal(thisWeek)} rows={thisWeek} lookups={lookups} today={today} />
-          <Section title="Next 30 days" total={signedTotal(thisMonth)} rows={thisMonth} lookups={lookups} today={today} />
-          <Section title="Later" rows={later} lookups={lookups} today={today} />
-          <Section title="No upcoming date" rows={unscheduled} lookups={lookups} today={today} />
+          <Section title="Overdue" total={signedTotal(overdue)} rows={overdue} lookups={lookups} today={today} onSelect={addRecordFor} />
+          <Section title="Next 7 days" total={signedTotal(thisWeek)} rows={thisWeek} lookups={lookups} today={today} onSelect={addRecordFor} />
+          <Section title="Next 30 days" total={signedTotal(thisMonth)} rows={thisMonth} lookups={lookups} today={today} onSelect={addRecordFor} />
+          <Section title="Later" rows={later} lookups={lookups} today={today} onSelect={addRecordFor} />
+          <Section title="No upcoming date" rows={unscheduled} lookups={lookups} today={today} onSelect={addRecordFor} />
         </>
+      )}
+
+      {prefill && (
+        <AddRecordModal
+          session={session}
+          accounts={activeAccounts}
+          prefill={prefill}
+          isOpen={!!prefill}
+          onClose={() => setPrefill(null)}
+          onSuccess={invalidateRecords}
+          onOpenRecord={(rec) => { setPrefill(null); router.push(`/account/${rec.accountId}`); }}
+        />
       )}
     </div>
   );
@@ -298,5 +350,5 @@ export function PlannedPaymentsView() {
     categories: new Map(categories.map((c) => [c.id, c])),
   };
 
-  return <PlannedPayments orders={orders} items={items} lookups={lookups} />;
+  return <PlannedPayments orders={orders} items={items} lookups={lookups} session={session} />;
 }

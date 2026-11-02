@@ -28,7 +28,7 @@ import type { Account, Category, WalletRecord } from "../actions";
 import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
 import { evaluateExpression } from "@/lib/calc";
-import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
+import { accountsQuery, useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
 import { ErrorBox, LabelChip, LabelSelect, ToggleRow, unwrap } from "./EditControls";
 import { formatMoney } from "@/lib/format";
 import { RECORD_STATES, recordDeleteGroup, type EditableState } from "@/lib/records";
@@ -671,44 +671,52 @@ function RecordForm({
   const { data: categories = [] } = useCategories(session);
   const { data: labels = [] } = useLabels(session);
   const createLabel = useCreateLabel(session, (id) => setLabelIds((ids) => [...ids, id]));
+  // Suggestions skip records on archived (hidden) accounts. The form's own
+  // `accounts` prop can include one when editing, so this reads the full list.
+  const { data: allAccounts = [] } = useQuery(accountsQuery(session));
+  const archivedAccountIds = new Set(allAccounts.filter((a) => a.archived).map((a) => a.id));
 
   const { data: apiSuggestions = [] } = useQuery({
     queryKey: ["noteSuggestions", session, debouncedNote],
     queryFn: async () => {
       const q = debouncedNote.trim();
       const [noteRes, cpRes] = await Promise.all([
-        fetchRecords({ from: "2000-01-01", limit: 10, note: q }),
-        fetchRecords({ from: "2000-01-01", limit: 10, counterParty: q }),
+        fetchRecords({ from: "2000-01-01", limit: 20, note: q }),
+        fetchRecords({ from: "2000-01-01", limit: 20, counterParty: q }),
       ]);
       const seen = new Set<string>();
       const merged: WalletRecord[] = [];
       for (const r of [...noteRes.records, ...cpRes.records]) {
         if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
       }
-      return merged.slice(0, 10);
+      return merged;
     },
     enabled: !!session && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
   });
 
-  const { data: apiPayerSuggestions = [] } = useQuery({
+  const { data: apiPayerRecords = [] } = useQuery({
     queryKey: ["payerSuggestions", session, debouncedPayer],
     queryFn: async () => {
       const q = debouncedPayer.trim();
-      const res = await fetchRecords({ from: "2000-01-01", limit: 20, counterParty: q });
-      const seen = new Set<string>();
-      const names: string[] = [];
-      for (const r of res.records) {
-        const cp = r.counterParty?.trim();
-        if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
-      }
-      return names.slice(0, 8);
+      return (await fetchRecords({ from: "2000-01-01", limit: 30, counterParty: q })).records;
     },
     enabled: !!session && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
-    placeholderData: [] as string[],
+    placeholderData: [] as WalletRecord[],
   });
+
+  const apiPayerSuggestions = (() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const r of apiPayerRecords) {
+      if (archivedAccountIds.has(r.accountId)) continue;
+      const cp = r.counterParty?.trim();
+      if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
+    }
+    return names.slice(0, 8);
+  })();
 
   useEffect(() => {
     if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
@@ -726,12 +734,13 @@ function RecordForm({
     const results: WalletRecord[] = [];
     for (const r of apiSuggestions) {
       if (mode === "edit" && r.id === initialRecord?.id) continue;
+      if (archivedAccountIds.has(r.accountId)) continue;
       const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(r);
     }
-    return results;
+    return results.slice(0, 10);
   })();
 
   function applySuggestion(r: WalletRecord) {

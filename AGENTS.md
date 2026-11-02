@@ -7,3 +7,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Browser verification
 
 Never open the browser (preview/dev server) to check your own work. Do not use the Browser pane or preview tools for self-verification of UI changes.
+
+# Wallet API
+
+- Docs: https://rest.budgetbakers.com/wallet/openapi/ui
+- Raw OpenAPI spec (JSON): https://rest.budgetbakers.com/wallet/openapi
+- Local types in `lib/wallet-api.d.ts` are generated from `openapi.json` with `npm run generate:api`. Check the live spec when a parameter or field seems missing; the local copy may be older.

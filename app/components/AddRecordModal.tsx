@@ -27,7 +27,8 @@ import { fetchRecords } from "@/lib/wallet-fetch";
 import type { Account, Category, WalletRecord } from "../actions";
 import type { CreateRecordRequest, PatchRecordItem } from "@/lib/wallet-client";
 import { getCategoryIcon, getAccountIcon } from "@/lib/utils";
-import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
+import { evaluateExpression } from "@/lib/calc";
+import { accountsQuery, useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
 import { ErrorBox, LabelChip, LabelSelect, ToggleRow, unwrap } from "./EditControls";
 import { formatMoney } from "@/lib/format";
 import { RECORD_STATES, recordDeleteGroup, type EditableState } from "@/lib/records";
@@ -37,6 +38,29 @@ type ClearableField = NonNullable<PatchRecordItem["$clear"]>[number];
 
 /** Single characters match nearly everything, so suggestions wait for a second one. */
 const MIN_SUGGESTION_QUERY_LENGTH = 2;
+
+/** The records API accepts at most this many account IDs per request. */
+const MAX_ACCOUNT_IDS_PER_REQUEST = 10;
+
+/** Splits account IDs into comma-separated groups the records API accepts. */
+function accountIdGroups(ids: string[]) {
+  const groups: string[] = [];
+  for (let i = 0; i < ids.length; i += MAX_ACCOUNT_IDS_PER_REQUEST) {
+    groups.push(ids.slice(i, i + MAX_ACCOUNT_IDS_PER_REQUEST).join(","));
+  }
+  return groups;
+}
+
+/** Searches records on the given account groups (one request each) and returns the newest `limit` matches. */
+async function searchRecords(groups: string[], limit: number, filter: { note?: string; counterParty?: string }) {
+  const results = await Promise.all(
+    groups.map((accountId) => fetchRecords({ from: "2000-01-01", limit, accountId, ...filter }))
+  );
+  return results
+    .flatMap((r) => r.records)
+    .sort((a, b) => b.recordDate.localeCompare(a.recordDate))
+    .slice(0, limit);
+}
 
 function toDatetimeLocal(date: Date): string {
   const offset = date.getTimezoneOffset();
@@ -620,6 +644,12 @@ function RecordForm({
 
   const [recordType, setRecordType] = useState<RecordType>(() => prefill?.recordType ?? deriveType(initialRecord));
   const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : prefill?.amount);
+  // What's typed in the amount field while editing (null shows `amount`). It
+  // can be a calculation such as "10 * 23"; the amount follows it whenever it
+  // evaluates, and leaving the field replaces it with the result.
+  const [amountExpr, setAmountExpr] = useState<string | null>(null);
+  const amountExprResult = amountExpr === null ? undefined : evaluateExpression(amountExpr);
+  const isCalculation = amountExpr !== null && /\d\s*[-+*/×÷(]|^\s*[-(]/.test(amountExpr);
   const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? prefill?.accountId ?? defaultAccountId ?? "");
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? prefill?.categoryId ?? "");
@@ -664,44 +694,49 @@ function RecordForm({
   const { data: categories = [] } = useCategories(session);
   const { data: labels = [] } = useLabels(session);
   const createLabel = useCreateLabel(session, (id) => setLabelIds((ids) => [...ids, id]));
+  // Suggestions only search active accounts, so records on archived (hidden)
+  // ones never come back from the API. The form's own `accounts` prop can
+  // include an archived one when editing, so this reads the full list.
+  const { data: allAccounts = [] } = useQuery(accountsQuery(session));
+  const activeAccountGroups = accountIdGroups(allAccounts.filter((a) => !a.archived).map((a) => a.id));
 
   const { data: apiSuggestions = [] } = useQuery({
-    queryKey: ["noteSuggestions", session, debouncedNote],
+    queryKey: ["noteSuggestions", session, debouncedNote, activeAccountGroups],
     queryFn: async () => {
       const q = debouncedNote.trim();
-      const [noteRes, cpRes] = await Promise.all([
-        fetchRecords({ from: "2000-01-01", limit: 10, note: q }),
-        fetchRecords({ from: "2000-01-01", limit: 10, counterParty: q }),
+      const [noteRecords, cpRecords] = await Promise.all([
+        searchRecords(activeAccountGroups, 10, { note: q }),
+        searchRecords(activeAccountGroups, 10, { counterParty: q }),
       ]);
       const seen = new Set<string>();
       const merged: WalletRecord[] = [];
-      for (const r of [...noteRes.records, ...cpRes.records]) {
+      for (const r of [...noteRecords, ...cpRecords]) {
         if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
       }
       return merged.slice(0, 10);
     },
-    enabled: !!session && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
+    enabled: !!session && activeAccountGroups.length > 0 && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
   });
 
-  const { data: apiPayerSuggestions = [] } = useQuery({
-    queryKey: ["payerSuggestions", session, debouncedPayer],
-    queryFn: async () => {
-      const q = debouncedPayer.trim();
-      const res = await fetchRecords({ from: "2000-01-01", limit: 20, counterParty: q });
-      const seen = new Set<string>();
-      const names: string[] = [];
-      for (const r of res.records) {
-        const cp = r.counterParty?.trim();
-        if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
-      }
-      return names.slice(0, 8);
-    },
-    enabled: !!session && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
+  const { data: apiPayerRecords = [] } = useQuery({
+    queryKey: ["payerSuggestions", session, debouncedPayer, activeAccountGroups],
+    queryFn: () => searchRecords(activeAccountGroups, 20, { counterParty: debouncedPayer.trim() }),
+    enabled: !!session && activeAccountGroups.length > 0 && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
-    placeholderData: [] as string[],
+    placeholderData: [] as WalletRecord[],
   });
+
+  const apiPayerSuggestions = (() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const r of apiPayerRecords) {
+      const cp = r.counterParty?.trim();
+      if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
+    }
+    return names.slice(0, 8);
+  })();
 
   useEffect(() => {
     if (defaultAccountId && accounts.length > 0 && !accountId) setAccountId(accounts[0].id);
@@ -824,9 +859,9 @@ function RecordForm({
     },
     onSuccess: (addAnother) => {
       if (addAnother === "sameDate") {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
+        setAmount(undefined); setAmountExpr(null); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
       } else if (addAnother) {
-        setAmount(undefined); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
+        setAmount(undefined); setAmountExpr(null); setNote(""); setPayer(""); setCategoryId(""); setLabelIds([]); setPlaceName(""); setPlaceAddress("");
         setRecordDate(new Date());
       } else {
         onSuccess();
@@ -895,24 +930,33 @@ function RecordForm({
                 <div className="flex flex-1 rounded-lg border-0 bg-card overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setAmount((v) => Math.max(0, (v ?? 0) - 1))}
+                    onClick={() => { setAmountExpr(null); setAmount((v) => Math.max(0, (v ?? 0) - 1)); }}
                     className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
                   >
                     −
                   </button>
                   <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={amount ?? ""}
-                    onChange={(e) => setAmount(e.target.value === "" ? undefined : Number(e.target.value))}
+                    type="text"
+                    value={amountExpr ?? (amount ?? "")}
+                    onChange={(e) => {
+                      const text = e.target.value;
+                      setAmountExpr(text);
+                      if (text.trim() === "") { setAmount(undefined); return; }
+                      const result = evaluateExpression(text);
+                      if (result !== undefined) setAmount(Math.abs(result));
+                    }}
+                    onKeyDown={(e) => {
+                      // Enter applies a calculation instead of submitting the form.
+                      if (e.key === "Enter" && isCalculation) { e.preventDefault(); setAmountExpr(null); }
+                    }}
+                    onBlur={() => setAmountExpr(null)}
                     placeholder="0.00"
                     aria-label="Amount"
-                    className="flex-1 min-w-0 bg-transparent text-center text-foreground text-sm focus:outline-none px-2 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 min-w-0 bg-transparent text-center text-foreground text-sm focus:outline-none px-2 py-2"
                   />
                   <button
                     type="button"
-                    onClick={() => setAmount((v) => (v ?? 0) + 1)}
+                    onClick={() => { setAmountExpr(null); setAmount((v) => (v ?? 0) + 1); }}
                     className="px-3 py-2 text-muted hover:text-foreground hover:bg-default transition-colors text-lg leading-none"
                   >
                     +
@@ -922,6 +966,12 @@ function RecordForm({
                   {currencyCode}
                 </div>
               </div>
+              {isCalculation && (
+                <p className={`text-xs mt-1 pl-3 tabular-nums ${amountExprResult === undefined ? "text-muted" : "text-foreground"}`}>
+                  {amountExprResult === undefined ? "Keep typing…" : `= ${amountExprResult}`}
+                  {amountExprResult !== undefined && amountExprResult < 0 && <span className="text-muted"> (saved as {Math.abs(amountExprResult)})</span>}
+                </p>
+              )}
             </fieldset>
 
             <div>

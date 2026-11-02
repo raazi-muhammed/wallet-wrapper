@@ -39,6 +39,29 @@ type ClearableField = NonNullable<PatchRecordItem["$clear"]>[number];
 /** Single characters match nearly everything, so suggestions wait for a second one. */
 const MIN_SUGGESTION_QUERY_LENGTH = 2;
 
+/** The records API accepts at most this many account IDs per request. */
+const MAX_ACCOUNT_IDS_PER_REQUEST = 10;
+
+/** Splits account IDs into comma-separated groups the records API accepts. */
+function accountIdGroups(ids: string[]) {
+  const groups: string[] = [];
+  for (let i = 0; i < ids.length; i += MAX_ACCOUNT_IDS_PER_REQUEST) {
+    groups.push(ids.slice(i, i + MAX_ACCOUNT_IDS_PER_REQUEST).join(","));
+  }
+  return groups;
+}
+
+/** Searches records on the given account groups (one request each) and returns the newest `limit` matches. */
+async function searchRecords(groups: string[], limit: number, filter: { note?: string; counterParty?: string }) {
+  const results = await Promise.all(
+    groups.map((accountId) => fetchRecords({ from: "2000-01-01", limit, accountId, ...filter }))
+  );
+  return results
+    .flatMap((r) => r.records)
+    .sort((a, b) => b.recordDate.localeCompare(a.recordDate))
+    .slice(0, limit);
+}
+
 function toDatetimeLocal(date: Date): string {
   const offset = date.getTimezoneOffset();
   const local = new Date(date.getTime() - offset * 60000);
@@ -671,38 +694,36 @@ function RecordForm({
   const { data: categories = [] } = useCategories(session);
   const { data: labels = [] } = useLabels(session);
   const createLabel = useCreateLabel(session, (id) => setLabelIds((ids) => [...ids, id]));
-  // Suggestions skip records on archived (hidden) accounts. The form's own
-  // `accounts` prop can include one when editing, so this reads the full list.
+  // Suggestions only search active accounts, so records on archived (hidden)
+  // ones never come back from the API. The form's own `accounts` prop can
+  // include an archived one when editing, so this reads the full list.
   const { data: allAccounts = [] } = useQuery(accountsQuery(session));
-  const archivedAccountIds = new Set(allAccounts.filter((a) => a.archived).map((a) => a.id));
+  const activeAccountGroups = accountIdGroups(allAccounts.filter((a) => !a.archived).map((a) => a.id));
 
   const { data: apiSuggestions = [] } = useQuery({
-    queryKey: ["noteSuggestions", session, debouncedNote],
+    queryKey: ["noteSuggestions", session, debouncedNote, activeAccountGroups],
     queryFn: async () => {
       const q = debouncedNote.trim();
-      const [noteRes, cpRes] = await Promise.all([
-        fetchRecords({ from: "2000-01-01", limit: 20, note: q }),
-        fetchRecords({ from: "2000-01-01", limit: 20, counterParty: q }),
+      const [noteRecords, cpRecords] = await Promise.all([
+        searchRecords(activeAccountGroups, 10, { note: q }),
+        searchRecords(activeAccountGroups, 10, { counterParty: q }),
       ]);
       const seen = new Set<string>();
       const merged: WalletRecord[] = [];
-      for (const r of [...noteRes.records, ...cpRes.records]) {
+      for (const r of [...noteRecords, ...cpRecords]) {
         if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
       }
-      return merged;
+      return merged.slice(0, 10);
     },
-    enabled: !!session && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
+    enabled: !!session && activeAccountGroups.length > 0 && debouncedNote.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
   });
 
   const { data: apiPayerRecords = [] } = useQuery({
-    queryKey: ["payerSuggestions", session, debouncedPayer],
-    queryFn: async () => {
-      const q = debouncedPayer.trim();
-      return (await fetchRecords({ from: "2000-01-01", limit: 30, counterParty: q })).records;
-    },
-    enabled: !!session && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
+    queryKey: ["payerSuggestions", session, debouncedPayer, activeAccountGroups],
+    queryFn: () => searchRecords(activeAccountGroups, 20, { counterParty: debouncedPayer.trim() }),
+    enabled: !!session && activeAccountGroups.length > 0 && debouncedPayer.trim().length >= MIN_SUGGESTION_QUERY_LENGTH,
     staleTime: 30_000,
     placeholderData: [] as WalletRecord[],
   });
@@ -711,7 +732,6 @@ function RecordForm({
     const seen = new Set<string>();
     const names: string[] = [];
     for (const r of apiPayerRecords) {
-      if (archivedAccountIds.has(r.accountId)) continue;
       const cp = r.counterParty?.trim();
       if (cp && !seen.has(cp)) { seen.add(cp); names.push(cp); }
     }
@@ -734,13 +754,12 @@ function RecordForm({
     const results: WalletRecord[] = [];
     for (const r of apiSuggestions) {
       if (mode === "edit" && r.id === initialRecord?.id) continue;
-      if (archivedAccountIds.has(r.accountId)) continue;
       const key = `${r.note ?? ""}|${r.counterParty ?? ""}|${r.accountId}|${r.category?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(r);
     }
-    return results.slice(0, 10);
+    return results;
   })();
 
   function applySuggestion(r: WalletRecord) {

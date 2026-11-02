@@ -10,8 +10,8 @@ import {
 } from "@/components/ui/resizable";
 import {
   useDashboard,
-  SIDEBAR_PERCENT_MIN,
-  SIDEBAR_PERCENT_MAX,
+  SIDEBAR_PX_MIN,
+  SIDEBAR_PX_MAX,
 } from "./DashboardProvider";
 
 // Below the md breakpoint there's no room for a side-by-side split — only
@@ -30,14 +30,14 @@ export function DashboardShell({
   detail: React.ReactNode;
 }) {
   const isDetailActive = usePathname() !== "/";
-  const { sidebarWidthPercent, setSidebarWidthPercent } = useDashboard();
+  const { sidebarWidthPx, setSidebarWidthPx } = useDashboard();
   // `defaultSize` is a mount-only hint, not a controlled "current size" prop —
-  // it must never be re-fed the live `sidebarWidthPercent`. `onResize` updates
+  // it must never be re-fed the live `sidebarWidthPx`. `onResize` updates
   // that state on every drag frame; passing the updated value straight back
   // into `defaultSize` fights the drag as it happens (the panel's own live
   // size and the "reset to this size" hint racing each other), which
   // produces a "snaps to a fixed width instead of tracking the drag" symptom.
-  const [initialSidebarWidthPercent] = useState(() => sidebarWidthPercent);
+  const [initialSidebarWidthPx] = useState(() => sidebarWidthPx);
 
   return (
     <SidebarProvider>
@@ -49,20 +49,17 @@ export function DashboardShell({
       <ResizablePanelGroup
         orientation="horizontal"
         style={{ height: "100dvh", overflow: "hidden" }}
-        // Without a default layout the server can't size the panels, so the
-        // HTML it sends doesn't match the client's first render.
-        defaultLayout={{
-          "sidebar-panel": initialSidebarWidthPercent,
-          "detail-panel": 100 - initialSidebarWidthPercent,
-        }}
       >
         <ResizablePanel
           id="sidebar-panel"
           data-hidden={isDetailActive ? "true" : "false"}
-          defaultSize={String(initialSidebarWidthPercent)}
-          minSize={String(SIDEBAR_PERCENT_MIN)}
-          maxSize={String(SIDEBAR_PERCENT_MAX)}
-          onResize={(size) => setSidebarWidthPercent(size.asPercentage)}
+          // A pixel `defaultSize` is rendered as a fixed flex-basis, so the
+          // server sends the same width the client hydrates with.
+          defaultSize={`${initialSidebarWidthPx}px`}
+          minSize={`${SIDEBAR_PX_MIN}px`}
+          maxSize={`${SIDEBAR_PX_MAX}px`}
+          groupResizeBehavior="preserve-pixel-size"
+          onResize={(size) => setSidebarWidthPx(size.inPixels)}
         >
           {sidebar}
         </ResizablePanel>

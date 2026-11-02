@@ -8,17 +8,15 @@ import type { Period } from "@/hooks/use-wallet-data";
 import { queryKeys, type QueryResource } from "@/lib/query-keys";
 import { fetchApiStats, type AccountsData } from "@/lib/wallet-fetch";
 
-// A pixel width has no relationship to how wide the viewport actually is —
-// persisted from a desktop session, it can exceed a phone's entire screen,
-// so the sidebar is sized as a *percentage* of the available space instead.
-// Percentages are inherently safe at any viewport width, with no client
-// measurement (and its "window.innerWidth reads 0 for a moment" pitfalls)
-// required. It's kept in a cookie, not localStorage, so the server renders
-// the panels at the same width the client hydrates with.
-const SIDEBAR_WIDTH_COOKIE = "wallet_sidebar_percent";
-export const SIDEBAR_PERCENT_DEFAULT = 20;
-export const SIDEBAR_PERCENT_MIN = 15;
-export const SIDEBAR_PERCENT_MAX = 50;
+// The sidebar keeps a fixed pixel width, so resizing the window only changes
+// the detail pane. Below the md breakpoint globals.css makes it full width, so
+// a desktop width never overflows a phone. It's kept in a cookie, not
+// localStorage, so the server renders the panels at the same width the client
+// hydrates with.
+const SIDEBAR_WIDTH_COOKIE = "wallet_sidebar_px";
+export const SIDEBAR_PX_DEFAULT = 280;
+export const SIDEBAR_PX_MIN = 220;
+export const SIDEBAR_PX_MAX = 480;
 
 // Where the token was kept before it moved to an httpOnly cookie. A token
 // found here is handed to the server once, then removed.
@@ -43,8 +41,8 @@ type DashboardContextValue = {
   /** Refreshes what a record change can affect: record lists, search, balances and planned payment status. */
   invalidateRecords: () => void;
   invalidateBudgets: () => void;
-  sidebarWidthPercent: number;
-  setSidebarWidthPercent: (percent: number) => void;
+  sidebarWidthPx: number;
+  setSidebarWidthPx: (px: number) => void;
 };
 
 type DashboardSearchValue = {
@@ -55,9 +53,9 @@ type DashboardSearchValue = {
 
 const ALL_RESOURCES = Object.keys(queryKeys) as QueryResource[];
 
-function parseSidebarWidthPercent(stored: string | undefined) {
-  const percent = Number(stored);
-  return percent >= SIDEBAR_PERCENT_MIN && percent <= SIDEBAR_PERCENT_MAX ? percent : SIDEBAR_PERCENT_DEFAULT;
+function parseSidebarWidthPx(stored: string | undefined) {
+  const px = Number(stored);
+  return px >= SIDEBAR_PX_MIN && px <= SIDEBAR_PX_MAX ? px : SIDEBAR_PX_DEFAULT;
 }
 
 const noSubscription = () => () => {};
@@ -105,10 +103,10 @@ export function DashboardProvider({
   const [period, setPeriod] = useState<Period>("3m");
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  // Only applied at mount (the Group's `defaultLayout`), so drags persist to
+  // Only applied at mount (the panel's `defaultSize`), so drags persist to
   // the cookie without updating state — re-rendering every consumer per drag
   // frame would make resizing janky.
-  const [sidebarWidthPercent] = useState(() => parseSidebarWidthPercent(storedSidebarWidth));
+  const [sidebarWidthPx] = useState(() => parseSidebarWidthPx(storedSidebarWidth));
 
   useEffect(() => {
     if (!hasLegacyToken) return;
@@ -183,13 +181,13 @@ export function DashboardProvider({
       invalidateAll: () => invalidate(...ALL_RESOURCES),
       invalidateRecords: () => invalidate("records", "accounts", "search", "standingOrderItems"),
       invalidateBudgets: () => invalidate("budgets"),
-      sidebarWidthPercent,
-      setSidebarWidthPercent(percent: number) {
-        const clamped = Math.min(SIDEBAR_PERCENT_MAX, Math.max(SIDEBAR_PERCENT_MIN, percent));
+      sidebarWidthPx,
+      setSidebarWidthPx(px: number) {
+        const clamped = Math.round(Math.min(SIDEBAR_PX_MAX, Math.max(SIDEBAR_PX_MIN, px)));
         document.cookie = `${SIDEBAR_WIDTH_COOKIE}=${clamped}; path=/; max-age=31536000; samesite=lax`;
       },
     }),
-    [session, maskedToken, tokenReady, period, sidebarWidthPercent, queryClient, router, invalidate]
+    [session, maskedToken, tokenReady, period, sidebarWidthPx, queryClient, router, invalidate]
   );
 
   const search = useMemo(() => ({ searchInput, setSearchInput, debouncedSearch }), [searchInput, debouncedSearch]);

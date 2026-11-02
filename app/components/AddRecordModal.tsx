@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,10 +46,23 @@ function toDatetimeLocal(date: Date): string {
 
 // ── Add Record Modal ──────────────────────────────────────────────────────────
 
-export function AddRecordModal({ session, accounts, defaultAccountId, isOpen, onClose, onSuccess, onOpenRecord }: {
+/** Starting values for a new record, e.g. taken from a planned payment. */
+export type RecordPrefill = {
+  recordType: "expense" | "income";
+  amount: number;
+  accountId?: string;
+  categoryId?: string;
+  note?: string;
+  counterParty?: string;
+  labelIds?: string[];
+  recordDate?: Date;
+};
+
+export function AddRecordModal({ session, accounts, defaultAccountId, prefill, isOpen, onClose, onSuccess, onOpenRecord }: {
   session: string;
   accounts: Account[];
   defaultAccountId?: string;
+  prefill?: RecordPrefill;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -68,6 +81,7 @@ export function AddRecordModal({ session, accounts, defaultAccountId, isOpen, on
         session={session}
         accounts={accounts}
         defaultAccountId={defaultAccountId}
+        prefill={prefill}
         onSuccess={() => { onClose(); onSuccess(); }}
         onCancel={onClose}
         onOpenRecord={onOpenRecord}
@@ -577,6 +591,7 @@ function RecordForm({
   session,
   accounts,
   defaultAccountId,
+  prefill,
   onSuccess,
   onCancel,
   onOpenRecord,
@@ -586,6 +601,7 @@ function RecordForm({
   session: string;
   accounts: Account[];
   defaultAccountId?: string;
+  prefill?: RecordPrefill;
   onSuccess: () => void;
   onCancel: () => void;
   onOpenRecord: (record: WalletRecord) => void;
@@ -602,16 +618,16 @@ function RecordForm({
   const isTransferRecord = isEdit && !!initialRecord.transfer;
   const initialState: EditableState = (RECORD_STATES.some((s) => s.id === initialRecord?.recordState) ? initialRecord?.recordState : "cleared") as EditableState;
 
-  const [recordType, setRecordType] = useState<RecordType>(() => deriveType(initialRecord));
-  const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : undefined);
-  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? defaultAccountId ?? "");
+  const [recordType, setRecordType] = useState<RecordType>(() => prefill?.recordType ?? deriveType(initialRecord));
+  const [amount, setAmount] = useState<number | undefined>(() => initialRecord ? Math.abs(initialRecord.amount.value) : prefill?.amount);
+  const [accountId, setAccountId] = useState(() => initialRecord?.accountId ?? prefill?.accountId ?? defaultAccountId ?? "");
   const [toAccountId, setToAccountId] = useState("");
-  const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? "");
-  const [note, setNote] = useState(() => initialRecord?.note ?? "");
-  const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? "");
+  const [categoryId, setCategoryId] = useState(() => initialRecord?.category?.id ?? prefill?.categoryId ?? "");
+  const [note, setNote] = useState(() => initialRecord?.note ?? prefill?.note ?? "");
+  const [payer, setPayer] = useState(() => initialRecord?.counterParty ?? prefill?.counterParty ?? "");
   const [recordState, setRecordState] = useState<EditableState>(initialState);
-  const [recordDate, setRecordDate] = useState<Date>(() => isEdit ? new Date(initialRecord.recordDate) : new Date());
-  const [labelIds, setLabelIds] = useState<string[]>(() => initialRecord?.labels.map((l) => l.id) ?? []);
+  const [recordDate, setRecordDate] = useState<Date>(() => isEdit ? new Date(initialRecord.recordDate) : prefill?.recordDate ?? new Date());
+  const [labelIds, setLabelIds] = useState<string[]>(() => initialRecord?.labels.map((l) => l.id) ?? prefill?.labelIds ?? []);
   const [placeName, setPlaceName] = useState(() => initialRecord?.place?.name ?? "");
   const [placeAddress, setPlaceAddress] = useState(() => initialRecord?.place?.address ?? "");
   const [unlinkTransfer, setUnlinkTransfer] = useState(false);
@@ -751,6 +767,12 @@ function RecordForm({
     const d = new Date();
     d.setDate(d.getDate() - 1);
     d.setHours(recordDate.getHours(), recordDate.getMinutes());
+    setRecordDate(d);
+  }
+
+  function shiftDate(days: number) {
+    const d = new Date(recordDate);
+    d.setDate(d.getDate() + days);
     setRecordDate(d);
   }
 
@@ -945,6 +967,24 @@ function RecordForm({
                 >
                   Yesterday
                 </button>
+                <div className="flex gap-1 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => shiftDate(-1)}
+                    aria-label="Previous day"
+                    className="p-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
+                  >
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => shiftDate(1)}
+                    aria-label="Next day"
+                    className="p-1 rounded-full border-0 bg-card text-muted hover:text-foreground hover:bg-default transition-colors"
+                  >
+                    <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
+                  </button>
+                </div>
               </div>
             </fieldset>
           </div>

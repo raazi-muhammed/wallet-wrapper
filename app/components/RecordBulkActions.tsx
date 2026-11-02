@@ -11,6 +11,7 @@ import type { PatchRecordItem } from "@/lib/wallet-client";
 import { useCategories, useLabels, useCreateLabel } from "@/hooks/use-wallet-data";
 import { AccountSelect, CategorySelect } from "./AddRecordModal";
 import { RECORD_STATES, recordDeleteGroup } from "@/lib/records";
+import { formatMoney } from "@/lib/format";
 import { ErrorBox, FieldLabel, LabelSelect, unwrap } from "./EditControls";
 
 type EditableState = (typeof RECORD_STATES)[number]["id"];
@@ -157,11 +158,23 @@ export function BulkActionBar({ session, selected, accounts, onSelectAll, onClea
   });
 
   const count = selected.length;
+  // Selections can span accounts, so amounts are only summed within a currency.
+  const totals = new Map<string, number>();
+  for (const r of selected) {
+    totals.set(r.amount.currencyCode, (totals.get(r.amount.currencyCode) ?? 0) + r.amount.value);
+  }
 
   return (
     <div className="sticky bottom-4 z-20 rounded-xl bg-card shadow-lg border border-border px-3 py-2 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-foreground pl-1 mr-auto">{count} selected</span>
+        <div className="flex flex-wrap items-baseline gap-x-2 pl-1 mr-auto">
+          <span className="text-sm font-medium text-foreground">{count} selected</span>
+          {[...totals].map(([currency, total]) => (
+            <span key={currency} className={`text-sm font-semibold tabular-nums ${total >= 0 ? "text-success" : "text-danger"}`}>
+              {total > 0 ? "+" : ""}{formatMoney(total, currency)}
+            </span>
+          ))}
+        </div>
         <Button size="sm" variant="ghost" onClick={onSelectAll}>Select all</Button>
         <Button size="sm" variant="ghost" onClick={onClear}>Done</Button>
         {confirmingDelete ? (
